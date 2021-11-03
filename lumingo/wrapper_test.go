@@ -40,7 +40,7 @@ func TestWrapperLambdaEvent(t *testing.T) {
 	}
 
 	wrapped := WrapHandler(handler, &Config{isTest: true}).(func(context.Context, json.RawMessage) (interface{}, error))
-	body := loadRawJSON(t, "../test/testdata/no-proxy-event.json")
+	body := loadRawJSON(t, "../test/testdata/lambda-event.json")
 	response, err := wrapped(context.Background(), *body)
 	assert.NoError(t, err)
 	assert.Equal(t, "test", response)
