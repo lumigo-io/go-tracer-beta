@@ -21,7 +21,7 @@ jobs:
     steps:
     - checkout
     - *restore_cache
-    - run: make check-style
+    - run: make setup check-style
     - *save_cache
 
   unit-tests:
