@@ -29,7 +29,7 @@ func WrapHandler(handler interface{}, cfg *Config) interface{} {
 		// if it's test do not recover raise errors
 		if !cfg.isTest {
 			defer func() {
-				if err := recover(); err != nil {
+				if err := recover(); err != nil { //nolint
 					//probably log every error
 				}
 			}()

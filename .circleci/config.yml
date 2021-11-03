@@ -2,7 +2,7 @@ version: 2.1
 executors:
   default:
     docker:
-    - image: circleci/golang:1.16
+    - image: circleci/golang:1.17
 
 aliases:
 - &restore_cache
@@ -24,16 +24,31 @@ jobs:
     - run: make check-style
     - *save_cache
 
+  unit-tests:
+    executor:
+      name: default
+    steps:
+    - checkout
+    - *restore_cache
+    - run: make test
+    - *save_cache
+
 workflows:
   version: 2
   
   ci-build:
     jobs:
     - check-style
+    - unit-tests
 
   master-build:
     jobs:
     - check-style:
+        filters:
+          branches:
+            only:
+            - master
+    - unit-tests:
         filters:
           branches:
             only:

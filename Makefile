@@ -4,11 +4,11 @@ BUILD_HASH := $(shell git rev-parse HEAD)
 BUILD_TIME := $(shell date -u +%Y%m%d.%H%M%S)
 LDFLAGS := '-s -w -X main.BuildVersion=${BUILD_HASH} -X main.BuildTime=${BUILD_TIME}'
 
-## Golang
+# Golang
 GO ?= go
-GO_TEST_FLAGS ?= -race
+GO_TEST_FLAGS ?= -race -coverprofile=cover.out -coverpkg=$(go list ./...)  ./...
 
-## Binaries.
+# Binaries.
 GO_INSTALL = ./scripts/go_install.sh
 TOOLS_BIN_DIR := $(abspath bin)
 
@@ -55,5 +55,14 @@ setup:
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s ${GOLANGCILINT_VER}
 	cp ./bin/golangci-lint ${GOPATH}/bin/
 
-	@echo Install go-mod-outdated
-	go get -u github.com/psampaz/go-mod-outdated
+.PHONY: test
+## test: tests all packages
+test:
+	@echo Running tests
+	$(GO) test -v $(GO_TEST_FLAGS) ./...
+
+.PHONY: help
+## help: prints this help message
+help:
+	@echo "Usage:"
+	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
