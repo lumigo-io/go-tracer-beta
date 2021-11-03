@@ -13,3 +13,12 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# VSCode
+.history
+
+# Bin
+build/_output/*
+dist/
+*.zip
+bin
