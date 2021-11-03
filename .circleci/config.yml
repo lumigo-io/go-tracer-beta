@@ -15,22 +15,13 @@ aliases:
       - "/go/pkg/mod"
 
 jobs:
-  check-style:
+  checks:
     executor:
       name: default
     steps:
     - checkout
     - *restore_cache
-    - run: make setup check-style
-    - *save_cache
-
-  unit-tests:
-    executor:
-      name: default
-    steps:
-    - checkout
-    - *restore_cache
-    - run: make test
+    - run: make checks
     - *save_cache
 
 workflows:
@@ -38,17 +29,11 @@ workflows:
   
   ci-build:
     jobs:
-    - check-style
-    - unit-tests
+    - checks
 
   master-build:
     jobs:
-    - check-style:
-        filters:
-          branches:
-            only:
-            - master
-    - unit-tests:
+    - checks:
         filters:
           branches:
             only:

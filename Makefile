@@ -20,6 +20,10 @@ OUTDATED_VER := master
 OUTDATED_BIN := ./bin/go-mod-outdated
 OUTDATED_GEN := $(TOOLS_BIN_DIR)/$(OUTDATED_BIN)
 
+.PHONY: checks
+## checks: Run check-style and test
+checks: setup check-style test
+
 .PHONY: check-style
 ## check-style: Runs govet and gofmt against all packages.
 check-style: govet lint
