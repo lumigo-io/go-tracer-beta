@@ -2,11 +2,9 @@ package lumigo
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
-	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -15,7 +13,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -31,26 +28,21 @@ func init() {
 
 // WrapHandler wraps the lambda handler
 func WrapHandler(handler interface{}, cfg *Config) interface{} {
-	return func(ctx context.Context, msg json.RawMessage) (interface{}, error) {
-		exporter, err := newExporter(cfg.PrintStdout)
-		if err != nil {
-			return handler, nil
-		}
-		tracerProvider := trace.NewTracerProvider(
-			trace.WithBatcher(exporter),
-			trace.WithResource(newResource(ctx, cfg)),
-		)
 
-		otel.SetTracerProvider(tracerProvider)
-		otel.SetTextMapPropagator(
-			propagation.NewCompositeTextMapPropagator(
-				propagation.TraceContext{},
-				propagation.Baggage{},
-			),
-		)
-		return otellambda.WrapHandler(lambda.NewHandler(handler),
-			otellambda.WithTracerProvider(tracerProvider)).Invoke(ctx, msg)
+	exporter, err := newExporter(cfg.PrintStdout)
+	if err != nil {
+		return handler
 	}
+	ctx := context.Background()
+	tracerProvider := trace.NewTracerProvider(
+		trace.WithBatcher(exporter),
+		trace.WithResource(newResource(ctx, cfg)),
+	)
+
+	otel.SetTracerProvider(tracerProvider)
+	return otellambda.InstrumentHandler(handler,
+		otellambda.WithTracerProvider(tracerProvider),
+		otellambda.WithFlusher(tracerProvider))
 }
 
 // newResource returns a resource describing this application.
@@ -89,7 +81,6 @@ func newExporter(printStdout bool) (trace.SpanExporter, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create data store")
 	}
-	defer w.Close()
 
 	return stdouttrace.New(
 		stdouttrace.WithWriter(w),

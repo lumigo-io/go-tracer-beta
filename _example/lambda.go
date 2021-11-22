@@ -65,5 +65,5 @@ func HandleRequest(ctx context.Context, name MyEvent) (string, error) {
 }
 
 func main() {
-	lambda.Start(lumigo.WrapHandler(HandleRequest, &lumigo.Config{PrintStdout: true}))
+	lambda.Start(lumigo.WrapHandler(HandleRequest, &lumigo.Config{PrintStdout: false}))
 }
