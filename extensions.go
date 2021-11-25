@@ -1,4 +1,4 @@
-package lumigo
+package lumigotracer
 
 import (
 	"context"

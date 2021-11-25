@@ -1,11 +1,10 @@
-package lumigo
+package lumigotracer
 
 import (
 	"context"
-	"fmt"
 	"os"
 
-	"github.com/google/uuid"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	lambdadetector "go.opentelemetry.io/contrib/detectors/aws/lambda"
@@ -24,19 +23,24 @@ func init() {
 	logger = log.New()
 	logger.Out = os.Stdout
 	logger.Formatter = &log.JSONFormatter{}
+
 }
 
 // WrapHandler wraps the lambda handler
-func WrapHandler(handler interface{}, cfg *Config) interface{} {
-
+func WrapHandler(handler interface{}, conf *Config) interface{} {
+	if err := loadConfig(*conf); err != nil {
+		logger.WithError(err).Error("failed validation error")
+		return handler
+	}
 	exporter, err := newExporter(cfg.PrintStdout)
 	if err != nil {
+		logger.WithError(err).Error("failed to create an exporter")
 		return handler
 	}
 	ctx := context.Background()
 	tracerProvider := trace.NewTracerProvider(
 		trace.WithBatcher(exporter),
-		trace.WithResource(newResource(ctx, cfg)),
+		trace.WithResource(newResource(ctx)),
 	)
 
 	otel.SetTracerProvider(tracerProvider)
@@ -45,20 +49,17 @@ func WrapHandler(handler interface{}, cfg *Config) interface{} {
 		otellambda.WithFlusher(tracerProvider))
 }
 
+// WrapHandlerWithAWSConfig wraps the lambda handler passing AWS Config
+func WrapHandlerWithAWSConfig(handler interface{}, cfg *Config, awsConfig *aws.Config) interface{} {
+	TraceAWSClients(awsConfig)
+	return WrapHandler(handler, cfg)
+}
+
 // newResource returns a resource describing this application.
-func newResource(ctx context.Context, cfg *Config) *resource.Resource {
+func newResource(ctx context.Context) *resource.Resource {
 	attrs := []attribute.KeyValue{
 		attribute.String("lumigo_token", cfg.Token),
-		attribute.String("service_name", cfg.ServiceName),
-		semconv.ServiceNameKey.String(cfg.ServiceName),
 	}
-	if cfg.EnableThreadSafe {
-		transactionID, _ := uuid.NewUUID()
-		attrs = append(attrs, attribute.String("globalTransactionId", fmt.Sprintf("c_%s", transactionID.String())))
-		parentID, _ := uuid.NewUUID()
-		attrs = append(attrs, attribute.String("globalParentId", parentID.String()))
-	}
-
 	detector := lambdadetector.NewResourceDetector()
 	res, err := detector.Detect(ctx)
 	if err != nil {

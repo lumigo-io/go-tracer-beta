@@ -7,8 +7,10 @@ import (
 	"net/http"
 
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	lumigo "github.com/lumigo-io/go-tracer"
+	lumigotracer "github.com/lumigo-io/go-tracer"
 )
 
 type MyEvent struct {
@@ -16,11 +18,13 @@ type MyEvent struct {
 }
 
 var client *http.Client
+var awsConfig aws.Config
 
 func init() {
 	client = &http.Client{
-		Transport: lumigo.NewTransport(http.DefaultTransport),
+		Transport: lumigotracer.NewTransport(http.DefaultTransport),
 	}
+	awsConfig, _ = config.LoadDefaultConfig(context.Background())
 }
 
 func HandleRequest(ctx context.Context, name MyEvent) (string, error) {
@@ -40,15 +44,15 @@ func HandleRequest(ctx context.Context, name MyEvent) (string, error) {
 	// cfg := aws.Config{
 	// 	Region:	"us-east-1",
 	//}
-	// lumigo.TraceAWSClients(&cfg)
+	// lumigotracer.TraceAWSClients(&cfg)
 
 	// # Solution 4
 	// OpenTelemetry AWS Clients traffic middleware
-	cfg, err := lumigo.LoadAWSConfig(ctx)
-	if err != nil {
-		return "", err
-	}
-	s3Client := s3.NewFromConfig(cfg)
+	// cfg, err := lumigotracer.LoadAWSConfig(ctx)
+	// if err != nil {
+	// 	return "", err
+	// }
+	s3Client := s3.NewFromConfig(awsConfig)
 	input := &s3.ListBucketsInput{}
 	result, err := s3Client.ListBuckets(ctx, input)
 	if err != nil {
@@ -65,5 +69,8 @@ func HandleRequest(ctx context.Context, name MyEvent) (string, error) {
 }
 
 func main() {
-	lambda.Start(lumigo.WrapHandler(HandleRequest, &lumigo.Config{PrintStdout: false}))
+	lambda.Start(lumigotracer.WrapHandlerWithAWSConfig(HandleRequest, &lumigotracer.Config{
+		PrintStdout: true,
+		Token:       "token",
+	}, &awsConfig))
 }
