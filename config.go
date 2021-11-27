@@ -41,8 +41,8 @@ func init() {
 }
 
 func loadConfig(conf Config) error {
-	token := viper.GetString("Token")
-	if token == "" {
+	cfg.Token = viper.GetString("Token")
+	if cfg.Token == "" {
 		cfg.Token = conf.Token
 	}
 	cfg.enabled = viper.GetBool("Enabled")

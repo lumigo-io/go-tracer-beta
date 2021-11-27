@@ -61,17 +61,25 @@ func TestLambdaHandlerSignatures(t *testing.T) {
 			args: []reflect.Value{reflect.ValueOf(mockContext), reflect.ValueOf(emptyPayload)},
 		},
 		{
-			name:     "missing params & return no error",
+			name:     "success empty handler function",
 			expected: nil,
 			handler: func() {
 			},
 			args: []reflect.Value{reflect.ValueOf(mockContext)},
 		},
+		{
+			name:     "success with context and payload",
+			expected: nil,
+			handler: func(ctx context.Context, a string) error {
+				return nil
+			},
+			args: []reflect.Value{reflect.ValueOf(mockContext), reflect.ValueOf(emptyPayload)},
+		},
 	}
 	for i, testCase := range testCases {
 		testCase := testCase
 		t.Run(fmt.Sprintf("testCase[%d] %s", i, testCase.name), func(t *testing.T) {
-			lambdaHandler := WrapHandler(testCase.handler, &Config{Token: "token"})
+			lambdaHandler := WrapHandler(testCase.handler, &Config{Token: "token", PrintStdout: true})
 			handler := reflect.ValueOf(lambdaHandler)
 			resp := handler.Call(testCase.args)
 			assert.Equal(t, 2, len(resp))
