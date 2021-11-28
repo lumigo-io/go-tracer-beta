@@ -13,3 +13,16 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# VSCode
+.history
+
+# Terraform
+.terraform
+*.tfstate*
+
+# Bin
+build/_output/*
+dist/
+*.zip
+bin
