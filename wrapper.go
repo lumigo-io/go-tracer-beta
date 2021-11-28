@@ -2,8 +2,10 @@ package lumigotracer
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -12,8 +14,10 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
+
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
@@ -39,14 +43,27 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 	}
 	ctx := context.Background()
 	tracerProvider := trace.NewTracerProvider(
-		trace.WithBatcher(exporter),
+		trace.WithSpanProcessor(trace.NewBatchSpanProcessor(exporter)),
 		trace.WithResource(newResource(ctx)),
 	)
 
 	otel.SetTracerProvider(tracerProvider)
-	return otellambda.InstrumentHandler(handler,
-		otellambda.WithTracerProvider(tracerProvider),
-		otellambda.WithFlusher(tracerProvider))
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	return func(ctx context.Context, payload json.RawMessage) (interface{}, error) {
+		traceCtx, span := tracerProvider.Tracer("lumigo").Start(ctx, "LumigoParentSpan")
+		defer span.End()
+
+		span.SetAttributes(attribute.String("event", string(payload)))
+		response, err := otellambda.WrapHandler(lambda.NewHandler(handler),
+			otellambda.WithTracerProvider(tracerProvider),
+			otellambda.WithFlusher(tracerProvider)).Invoke(traceCtx, payload)
+		if err != nil {
+			span.SetAttributes(attribute.String("exception", err.Error()))
+		}
+		span.SetAttributes(attribute.String("response", string(response)))
+		return string(response), err
+	}
 }
 
 // WrapHandlerWithAWSConfig wraps the lambda handler passing AWS Config

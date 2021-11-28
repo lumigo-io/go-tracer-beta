@@ -69,8 +69,10 @@ func HandleRequest(ctx context.Context, name MyEvent) (string, error) {
 }
 
 func main() {
-	lambda.Start(lumigotracer.WrapHandlerWithAWSConfig(HandleRequest, &lumigotracer.Config{
+	wrappedHandler := lumigotracer.WrapHandlerWithAWSConfig(HandleRequest, &lumigotracer.Config{
 		PrintStdout: true,
 		Token:       "token",
-	}, &awsConfig))
+	}, &awsConfig)
+
+	lambda.Start(wrappedHandler)
 }
