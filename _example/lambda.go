@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -60,7 +61,7 @@ func HandleRequest(ctx context.Context, name MyEvent) (string, error) {
 	}
 
 	// track external requests
-	req, err := http.NewRequest("GET", "http://google.com", nil)
+	req, _ := http.NewRequest("GET", "http://google.com", nil)
 	client.Do(req)
 	for _, bucket := range result.Buckets {
 		log.Println(*bucket.Name + ": " + bucket.CreationDate.Format("2006-01-02 15:04:05 Monday"))
@@ -69,6 +70,7 @@ func HandleRequest(ctx context.Context, name MyEvent) (string, error) {
 }
 
 func main() {
+	os.Setenv("LUMIGO_DEBUG", "true")
 	wrappedHandler := lumigotracer.WrapHandlerWithAWSConfig(HandleRequest, &lumigotracer.Config{
 		PrintStdout: true,
 		Token:       "token",

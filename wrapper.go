@@ -3,6 +3,7 @@ package lumigotracer
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
@@ -36,6 +37,9 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 		logger.WithError(err).Error("failed validation error")
 		return handler
 	}
+	if !cfg.debug {
+		logger.Out = io.Discard
+	}
 	exporter, err := newExporter(cfg.PrintStdout)
 	if err != nil {
 		logger.WithError(err).Error("failed to create an exporter")
@@ -54,15 +58,28 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 		traceCtx, span := tracerProvider.Tracer("lumigo").Start(ctx, "LumigoParentSpan")
 		defer span.End()
 
-		span.SetAttributes(attribute.String("event", string(payload)))
-		response, err := otellambda.WrapHandler(lambda.NewHandler(handler),
+		response, lambdaErr := otellambda.WrapHandler(lambda.NewHandler(handler),
 			otellambda.WithTracerProvider(tracerProvider),
 			otellambda.WithFlusher(tracerProvider)).Invoke(traceCtx, payload)
-		if err != nil {
-			span.SetAttributes(attribute.String("exception", err.Error()))
+
+		if data, err := json.Marshal(&payload); err == nil {
+			span.SetAttributes(attribute.String("event", string(data)))
+		} else {
+			logger.WithError(err).Error("failed to track event")
 		}
-		span.SetAttributes(attribute.String("response", string(response)))
-		return string(response), err
+
+		if data, err := json.Marshal(json.RawMessage(response)); err == nil {
+			span.SetAttributes(attribute.String("response", string(data)))
+		} else {
+			logger.WithError(err).Error("failed to track response")
+		}
+
+		if lambdaErr != nil {
+			span.SetAttributes(attribute.String("exception", lambdaErr.Error()))
+			return json.RawMessage(response), lambdaErr
+		}
+		tracerProvider.ForceFlush(ctx)
+		return json.RawMessage(response), lambdaErr
 	}
 }
 
