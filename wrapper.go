@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	easy "github.com/t-tomalak/logrus-easy-formatter"
 	lambdadetector "go.opentelemetry.io/contrib/detectors/aws/lambda"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-lambda-go/otellambda"
 	"go.opentelemetry.io/otel"
@@ -27,7 +28,10 @@ var logger *log.Logger
 func init() {
 	logger = log.New()
 	logger.Out = os.Stdout
-	logger.Formatter = &log.JSONFormatter{}
+	logger.Formatter = &easy.Formatter{
+		TimestampFormat: "2006-01-02 15:04:05",
+		LogFormat:       "#LUMIGO# - %time% - %lvl% - %msg%",
+	}
 
 }
 
@@ -46,11 +50,16 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 		return handler
 	}
 	ctx := context.Background()
-	tracerProvider := trace.NewTracerProvider(
-		trace.WithSpanProcessor(trace.NewBatchSpanProcessor(exporter)),
-		trace.WithResource(newResource(ctx)),
-	)
 
+	var tracerProvider *trace.TracerProvider
+	if conf.tracerProvider == nil {
+		tracerProvider = trace.NewTracerProvider(
+			trace.WithSpanProcessor(trace.NewBatchSpanProcessor(exporter)),
+			trace.WithResource(newResource(ctx)),
+		)
+	} else {
+		tracerProvider = conf.tracerProvider
+	}
 	otel.SetTracerProvider(tracerProvider)
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
@@ -78,7 +87,6 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 			span.SetAttributes(attribute.String("exception", lambdaErr.Error()))
 			return json.RawMessage(response), lambdaErr
 		}
-		tracerProvider.ForceFlush(ctx)
 		return json.RawMessage(response), lambdaErr
 	}
 }
