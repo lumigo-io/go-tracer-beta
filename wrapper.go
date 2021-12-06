@@ -2,18 +2,24 @@ package lumigotracer
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"os"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	easy "github.com/t-tomalak/logrus-easy-formatter"
 	lambdadetector "go.opentelemetry.io/contrib/detectors/aws/lambda"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-lambda-go/otellambda"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
+
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
@@ -22,7 +28,10 @@ var logger *log.Logger
 func init() {
 	logger = log.New()
 	logger.Out = os.Stdout
-	logger.Formatter = &log.JSONFormatter{}
+	logger.Formatter = &easy.Formatter{
+		TimestampFormat: "2006-01-02 15:04:05",
+		LogFormat:       "#LUMIGO# - %time% - %lvl% - %msg%",
+	}
 
 }
 
@@ -32,21 +41,54 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 		logger.WithError(err).Error("failed validation error")
 		return handler
 	}
+	if !cfg.debug {
+		logger.Out = io.Discard
+	}
 	exporter, err := newExporter(cfg.PrintStdout)
 	if err != nil {
 		logger.WithError(err).Error("failed to create an exporter")
 		return handler
 	}
 	ctx := context.Background()
-	tracerProvider := trace.NewTracerProvider(
-		trace.WithBatcher(exporter),
-		trace.WithResource(newResource(ctx)),
-	)
 
+	var tracerProvider *trace.TracerProvider
+	if conf.tracerProvider == nil {
+		tracerProvider = trace.NewTracerProvider(
+			trace.WithSpanProcessor(trace.NewBatchSpanProcessor(exporter)),
+			trace.WithResource(newResource(ctx)),
+		)
+	} else {
+		tracerProvider = conf.tracerProvider
+	}
 	otel.SetTracerProvider(tracerProvider)
-	return otellambda.InstrumentHandler(handler,
-		otellambda.WithTracerProvider(tracerProvider),
-		otellambda.WithFlusher(tracerProvider))
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	return func(ctx context.Context, payload json.RawMessage) (interface{}, error) {
+		traceCtx, span := tracerProvider.Tracer("lumigo").Start(ctx, "LumigoParentSpan")
+		defer span.End()
+
+		response, lambdaErr := otellambda.WrapHandler(lambda.NewHandler(handler),
+			otellambda.WithTracerProvider(tracerProvider),
+			otellambda.WithFlusher(tracerProvider)).Invoke(traceCtx, payload)
+
+		if data, err := json.Marshal(&payload); err == nil {
+			span.SetAttributes(attribute.String("event", string(data)))
+		} else {
+			logger.WithError(err).Error("failed to track event")
+		}
+
+		if data, err := json.Marshal(json.RawMessage(response)); err == nil {
+			span.SetAttributes(attribute.String("response", string(data)))
+		} else {
+			logger.WithError(err).Error("failed to track response")
+		}
+
+		if lambdaErr != nil {
+			span.SetAttributes(attribute.String("exception", lambdaErr.Error()))
+			return json.RawMessage(response), lambdaErr
+		}
+		return json.RawMessage(response), lambdaErr
+	}
 }
 
 // WrapHandlerWithAWSConfig wraps the lambda handler passing AWS Config
