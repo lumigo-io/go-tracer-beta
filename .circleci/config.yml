@@ -25,6 +25,7 @@ jobs:
     - checkout
     - *restore_cache
     - run: make checks
+    - run: make upload-codecov
     - *save_cache
   
   create-push-release:

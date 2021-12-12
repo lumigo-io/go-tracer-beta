@@ -92,6 +92,11 @@ test:
 	@echo Running tests
 	$(GO) test -v $(GO_TEST_FLAGS) ./...
 
+.PHONY: upload-codecov
+## upload-codecov: uploads cover.out to codecov
+upload-codecov:
+	curl -s https://codecov.io/bash | bash
+
 .PHONY: help
 ## help: prints this help message
 help:
