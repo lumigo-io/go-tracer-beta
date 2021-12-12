@@ -31,6 +31,10 @@ const SPAN_END_FILE = "/tmp/lumigo-spans/span_end"
 
 var logger *log.Logger
 
+const (
+	version = "0.1.0"
+)
+
 func init() {
 	logger = log.New()
 	logger.Out = os.Stdout
@@ -65,7 +69,10 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 		if conf.tracerProvider == nil {
 			tracerProvider = trace.NewTracerProvider(
 				trace.WithSpanProcessor(trace.NewBatchSpanProcessor(exporter)),
-				trace.WithResource(newResource(ctx, attribute.String("event", string(data)))),
+				trace.WithResource(newResource(ctx,
+					attribute.String("event", string(data)),
+					attribute.String("tracer_version", version),
+				)),
 			)
 		} else {
 			tracerProvider = conf.tracerProvider
@@ -82,6 +89,7 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 
 		os.Setenv("IS_COLD_START", "true") // nolint
 
+		span.SetAttributes(attribute.String("tracer_version", version))
 		if eventErr == nil {
 			span.SetAttributes(attribute.String("event", string(data)))
 		}

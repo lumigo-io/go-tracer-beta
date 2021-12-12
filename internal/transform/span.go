@@ -77,6 +77,12 @@ func Span(span sdktrace.ReadOnlySpan) telemetry.Span {
 		lumigoSpan.LambdaResponse = fmt.Sprint(returnValue)
 	}
 
+	if tracerVersion, ok := attrs["tracer_version"]; ok {
+		lumigoSpan.SpanInfo.TracerVersion = telemetry.TracerVersion{
+			Version: fmt.Sprint(tracerVersion),
+		}
+	}
+
 	lumigoSpan.MemoryAllocated = os.Getenv("AWS_LAMBDA_FUNCTION_MEMORY_SIZE")
 	lumigoSpan.Runtime = os.Getenv("AWS_EXECUTION_ENV")
 	lumigoSpan.LambdaName = os.Getenv("AWS_LAMBDA_FUNCTION_NAME")

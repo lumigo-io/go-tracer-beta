@@ -4,14 +4,21 @@ import "time"
 
 // SpanTraceRoot the amazon X-Trace-ID
 type SpanTraceRoot struct {
-	Root string
+	Root string `json:"root"`
+}
+
+// TracerVersion the version info for the tracer
+// which captured the spans
+type TracerVersion struct {
+	Version string `json:"version"`
 }
 
 // SpanInfo extra info for span
 type SpanInfo struct {
-	LogStreamName string
-	LogGroupName  string
-	TraceID       SpanTraceRoot
+	LogStreamName string        `json:"logStreamName"`
+	LogGroupName  string        `json:"logGroupName"`
+	TraceID       SpanTraceRoot `json:"traceId"`
+	TracerVersion TracerVersion `json:"tracer"`
 }
 
 // Span is a distributed tracing span.
