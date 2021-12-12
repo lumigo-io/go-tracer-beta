@@ -3,14 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	lumigotracer "github.com/lumigo-io/go-tracer"
 )
 
@@ -53,27 +51,27 @@ func HandleRequest(ctx context.Context, name MyEvent) (string, error) {
 	// if err != nil {
 	// 	return "", err
 	// }
-	s3Client := s3.NewFromConfig(awsConfig)
-	input := &s3.ListBucketsInput{}
-	result, err := s3Client.ListBuckets(ctx, input)
-	if err != nil {
-		return "", err
-	}
+	// s3Client := s3.NewFromConfig(awsConfig)
+	// input := &s3.ListBucketsInput{}
+	// result, err := s3Client.ListBuckets(ctx, input)
+	// if err != nil {
+	// 	return "", err
+	// }
 
-	// track external requests
-	req, _ := http.NewRequest("GET", "http://google.com", nil)
-	client.Do(req)
-	for _, bucket := range result.Buckets {
-		log.Println(*bucket.Name + ": " + bucket.CreationDate.Format("2006-01-02 15:04:05 Monday"))
-	}
+	// // track external requests
+	// req, _ := http.NewRequest("GET", "http://google.com", nil)
+	// client.Do(req)
+	// for _, bucket := range result.Buckets {
+	// 	log.Println(*bucket.Name + ": " + bucket.CreationDate.Format("2006-01-02 15:04:05 Monday"))
+	// }
 	return fmt.Sprintf("Hello %s!", name.Name), nil
 }
 
 func main() {
 	os.Setenv("LUMIGO_DEBUG", "true")
 	wrappedHandler := lumigotracer.WrapHandlerWithAWSConfig(HandleRequest, &lumigotracer.Config{
-		PrintStdout: true,
-		Token:       "token",
+		PrintStdout: false,
+		Token:       "t_f2956385a53a4dcb9aea0",
 	}, &awsConfig)
 
 	lambda.Start(wrappedHandler)

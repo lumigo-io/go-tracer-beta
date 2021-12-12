@@ -10,6 +10,12 @@ resource "aws_lambda_function" "otel" {
   source_code_hash = data.archive_file.lambda_otel.output_base64sha256
 
   role = aws_iam_role.lambda_exec.arn
+
+   environment {
+    variables = {
+      LUMIGO_DEBUG = "true"
+    }
+  }
 }
 
 resource "aws_cloudwatch_log_group" "otel" {
