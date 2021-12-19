@@ -1,19 +1,27 @@
 package transform
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/aws/aws-lambda-go/lambdacontext"
+	"github.com/aws/aws-sdk-go/aws/arn"
+	lumigoctx "github.com/lumigo-io/go-tracer/internal/context"
 	"github.com/lumigo-io/go-tracer/internal/telemetry"
+	"github.com/pkg/errors"
+	"github.com/segmentio/ksuid"
+	"github.com/sirupsen/logrus"
 
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	apitrace "go.opentelemetry.io/otel/trace"
 )
 
-func Span(span sdktrace.ReadOnlySpan) telemetry.Span {
+func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLogger) telemetry.Span {
 	numAttrs := len(span.Attributes()) + span.Resource().Len() + 2
 
 	// If kind has been set, make room for it.
@@ -47,26 +55,30 @@ func Span(span sdktrace.ReadOnlySpan) telemetry.Span {
 	}
 	lumigoSpan := telemetry.Span{
 		ID:               span.SpanContext().SpanID().String(),
-		TransactionID:    span.SpanContext().TraceID().String(),
+		TransactionID:    ksuid.New().String(),
 		ParentID:         parentSpanID,
-		StartedTimestamp: span.StartTime(),
-		EndedTimestamp:   span.EndTime(),
+		StartedTimestamp: span.StartTime().Unix(),
+		EndedTimestamp:   span.EndTime().Unix(),
 	}
 
-	if id, ok := attrs["faas.execution"]; ok {
-		lumigoSpan.LambdaContainerID = fmt.Sprint(id)
-	}
+	lambdaCtx, lambdaOk := lambdacontext.FromContext(ctx)
+	if lambdaOk {
+		lumigoSpan.LambdaContainerID = lambdaCtx.AwsRequestID
 
-	if region, ok := attrs["cloud.region"]; ok {
-		lumigoSpan.Region = fmt.Sprint(region)
+		accountID, err := getAccountID(lambdaCtx)
+		if err != nil {
+			logger.WithError(err).Error()
+		}
+		lumigoSpan.Account = accountID
+
+		deadline, _ := ctx.Deadline()
+		lumigoSpan.MaxFinishTime = time.Now().Unix() - deadline.Unix()
+	} else {
+		logger.Error("unable to fetch from LambdaContext")
 	}
 
 	if token, ok := attrs["lumigo_token"]; ok {
 		lumigoSpan.Token = fmt.Sprint(token)
-	}
-
-	if accountID, ok := attrs["cloud.account.id"]; ok {
-		lumigoSpan.Account = fmt.Sprint(accountID)
 	}
 
 	if event, ok := attrs["event"]; ok {
@@ -77,12 +89,7 @@ func Span(span sdktrace.ReadOnlySpan) telemetry.Span {
 		lumigoSpan.LambdaResponse = fmt.Sprint(returnValue)
 	}
 
-	if tracerVersion, ok := attrs["tracer_version"]; ok {
-		lumigoSpan.SpanInfo.TracerVersion = telemetry.TracerVersion{
-			Version: fmt.Sprint(tracerVersion),
-		}
-	}
-
+	lumigoSpan.Region = os.Getenv("AWS_REGION")
 	lumigoSpan.MemoryAllocated = os.Getenv("AWS_LAMBDA_FUNCTION_MEMORY_SIZE")
 	lumigoSpan.Runtime = os.Getenv("AWS_EXECUTION_ENV")
 	lumigoSpan.LambdaName = os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
@@ -90,12 +97,20 @@ func Span(span sdktrace.ReadOnlySpan) telemetry.Span {
 	lumigoSpan.SpanInfo = telemetry.SpanInfo{
 		LogStreamName: os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME"),
 		LogGroupName:  os.Getenv("AWS_LAMBDA_LOG_GROUP_NAME"),
-		TraceID:       telemetry.SpanTraceRoot{},
+		TraceID: telemetry.SpanTraceRoot{
+			Root: getAmazonTraceID(),
+		},
 	}
-	awsTraceID := strings.SplitN(os.Getenv("_X_AMZN_TRACE_ID"), "=", 2)
-	if len(awsTraceID) > 2 {
-		lumigoSpan.SpanInfo.TraceID.Root = awsTraceID[1]
+
+	lumigoCtx, lumigoOk := lumigoctx.FromContext(ctx)
+	if lumigoOk {
+		lumigoSpan.SpanInfo.TracerVersion = telemetry.TracerVersion{
+			Version: lumigoCtx.TracerVersion,
+		}
+	} else {
+		logger.Error("unable to fetch from LumigoContext")
 	}
+
 	isColdStart := os.Getenv("IS_COLD_START")
 	if isColdStart == "" && !isProvisionConcurrencyInitialization() {
 		lumigoSpan.LambdaReadiness = "cold"
@@ -121,4 +136,21 @@ func Span(span sdktrace.ReadOnlySpan) telemetry.Span {
 
 func isProvisionConcurrencyInitialization() bool {
 	return os.Getenv("AWS_LAMBDA_INITIALIZATION_TYPE") == "provisioned-concurrency"
+}
+
+func getAccountID(ctx *lambdacontext.LambdaContext) (string, error) {
+	functionARN, err := arn.Parse(ctx.InvokedFunctionArn)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to parse ARN")
+	}
+	return functionARN.AccountID, nil
+}
+
+func getAmazonTraceID() string {
+	awsTraceItems := strings.SplitN(os.Getenv("_X_AMZN_TRACE_ID"), ";", 2)
+	if len(awsTraceItems) > 1 {
+		root := strings.SplitN(awsTraceItems[0], "=", 2)
+		return root[1]
+	}
+	return ""
 }

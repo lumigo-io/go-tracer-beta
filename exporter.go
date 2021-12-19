@@ -3,33 +3,33 @@ package lumigotracer
 import (
 	"context"
 	"encoding/json"
-	"io"
+	"fmt"
 	"os"
 	"sync"
 
 	"github.com/lumigo-io/go-tracer/internal/telemetry"
 	"github.com/lumigo-io/go-tracer/internal/transform"
 	"github.com/pkg/errors"
+	"github.com/segmentio/ksuid"
+	"github.com/sirupsen/logrus"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 // Exporter exports OpenTelemetry data to New Relic.
 type Exporter struct {
-	startEncoder *json.Encoder
-	endEncoder   *json.Encoder
-	encoderMu    sync.Mutex
+	context   context.Context
+	logger    logrus.FieldLogger
+	encoderMu sync.Mutex
 
 	stoppedMu sync.RWMutex
 	stopped   bool
 }
 
 // New creates an Exporter with the passed options.
-func NewExporter(startSpanWriter io.Writer, endSpanWriter io.Writer) (*Exporter, error) {
-	startEnc := json.NewEncoder(startSpanWriter)
-	endEnc := json.NewEncoder(endSpanWriter)
+func NewExporter(ctx context.Context, logger logrus.FieldLogger) (*Exporter, error) {
 	return &Exporter{
-		startEncoder: startEnc,
-		endEncoder:   endEnc,
+		logger:  logger,
+		context: ctx,
 	}, nil
 }
 
@@ -38,7 +38,6 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	if e == nil {
 		return nil
 	}
-
 	e.stoppedMu.RLock()
 	stopped := e.stopped
 	e.stoppedMu.RUnlock()
@@ -54,9 +53,9 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	e.encoderMu.Lock()
 	defer e.encoderMu.Unlock()
 	for _, span := range spans {
-		lumigoSpan := transform.Span(span)
+		lumigoSpan := transform.Span(e.context, span, logger)
 		if span.Name() == os.Getenv("AWS_LAMBDA_FUNCTION_NAME") {
-			if err := e.startEncoder.Encode([]telemetry.Span{lumigoSpan}); err != nil {
+			if err := writeSpan([]telemetry.Span{lumigoSpan}, true); err != nil {
 				return errors.Wrap(err, "failed to store startSpan")
 			}
 			continue
@@ -67,8 +66,7 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	if len(lumigoSpans) == 0 {
 		return nil
 	}
-	err := e.endEncoder.Encode(lumigoSpans)
-	if err != nil {
+	if err := writeSpan(lumigoSpans, false); err != nil {
 		return errors.Wrap(err, "failed to store endSpan")
 	}
 	return nil
@@ -84,6 +82,24 @@ func (e *Exporter) Shutdown(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
+	}
+	return nil
+}
+
+func writeSpan(spans []telemetry.Span, isStart bool) error {
+	var file string
+	if isStart {
+		file = fmt.Sprintf("/tmp/lumigo-spans/%s_span", ksuid.New())
+	} else {
+		file = fmt.Sprintf("/tmp/lumigo-spans/%s_end", ksuid.New())
+	}
+	writer, err := os.Create(file)
+	if err != nil {
+		return errors.Wrapf(err, "failed to create span data store: %s", file)
+	}
+	enc := json.NewEncoder(writer)
+	if err := enc.Encode(spans); err != nil {
+		return errors.Wrapf(err, "failed to write span in data store: %s", file)
 	}
 	return nil
 }

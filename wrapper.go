@@ -3,13 +3,12 @@ package lumigotracer
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	lumigoctx "github.com/lumigo-io/go-tracer/internal/context"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	easy "github.com/t-tomalak/logrus-easy-formatter"
@@ -18,7 +17,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 
@@ -26,8 +24,6 @@ import (
 )
 
 const SPANS_DIR = "/tmp/lumigo-spans"
-const SPAN_START_FILE = "/tmp/lumigo-spans/span_start"
-const SPAN_END_FILE = "/tmp/lumigo-spans/span_end"
 
 var logger *log.Logger
 
@@ -54,13 +50,17 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 	if !cfg.debug {
 		logger.Out = io.Discard
 	}
-	exporter, err := newExporter(cfg.PrintStdout)
-	if err != nil {
-		logger.WithError(err).Error("failed to create an exporter")
-		return handler
-	}
 
 	return func(ctx context.Context, payload json.RawMessage) (interface{}, error) {
+		ctx = lumigoctx.NewContext(ctx, &lumigoctx.LumigoContext{
+			TracerVersion: version,
+		})
+
+		exporter, err := newExporter(cfg.PrintStdout, ctx, logger)
+		if err != nil {
+			return lambda.NewHandler(handler).Invoke(ctx, payload)
+		}
+
 		data, eventErr := json.Marshal(&payload)
 		if eventErr != nil {
 			logger.WithError(err).Error("failed to track event")
@@ -68,18 +68,17 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 		var tracerProvider *trace.TracerProvider
 		if conf.tracerProvider == nil {
 			tracerProvider = trace.NewTracerProvider(
-				trace.WithSpanProcessor(trace.NewBatchSpanProcessor(exporter)),
+				trace.WithSyncer(exporter),
 				trace.WithResource(newResource(ctx,
 					attribute.String("event", string(data)),
-					attribute.String("tracer_version", version),
 				)),
 			)
 		} else {
 			tracerProvider = conf.tracerProvider
 		}
 		otel.SetTracerProvider(tracerProvider)
-		otel.SetTextMapPropagator(propagation.TraceContext{})
 
+		defer tracerProvider.ForceFlush(ctx)
 		traceCtx, span := tracerProvider.Tracer("lumigo").Start(ctx, "LumigoParentSpan")
 		defer span.End()
 
@@ -89,7 +88,6 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 
 		os.Setenv("IS_COLD_START", "true") // nolint
 
-		span.SetAttributes(attribute.String("tracer_version", version))
 		if eventErr == nil {
 			span.SetAttributes(attribute.String("event", string(data)))
 		}
@@ -104,17 +102,6 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 			span.SetAttributes(attribute.String("exception", lambdaErr.Error()))
 			return json.RawMessage(response), lambdaErr
 		}
-		content, err := ioutil.ReadFile(SPAN_START_FILE)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Print(string(content))
-
-		content, err = ioutil.ReadFile(SPAN_END_FILE)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Print(string(content))
 		return json.RawMessage(response), lambdaErr
 	}
 }
@@ -145,7 +132,7 @@ func newResource(ctx context.Context, extraAttrs ...attribute.KeyValue) *resourc
 }
 
 // newExporter returns a console exporter.
-func newExporter(printStdout bool) (trace.SpanExporter, error) {
+func newExporter(printStdout bool, ctx context.Context, logger log.FieldLogger) (trace.SpanExporter, error) {
 	if printStdout {
 		return stdouttrace.New()
 	}
@@ -155,14 +142,6 @@ func newExporter(printStdout bool) (trace.SpanExporter, error) {
 			log.Println(err)
 		}
 	}
-	startWriter, err := os.Create(SPAN_START_FILE)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create start data store")
-	}
-	endWriter, err := os.Create(SPAN_END_FILE)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create end data store")
-	}
 
-	return NewExporter(startWriter, endWriter)
+	return NewExporter(ctx, logger)
 }

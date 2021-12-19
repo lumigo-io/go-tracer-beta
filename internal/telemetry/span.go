@@ -1,10 +1,8 @@
 package telemetry
 
-import "time"
-
 // SpanTraceRoot the amazon X-Trace-ID
 type SpanTraceRoot struct {
-	Root string `json:"root"`
+	Root string `json:"Root"`
 }
 
 // TracerVersion the version info for the tracer
@@ -76,8 +74,11 @@ type Span struct {
 	SpanInfo SpanInfo `json:"info"`
 
 	// StartedTimestamp when this span started
-	StartedTimestamp time.Time `json:"started"`
+	StartedTimestamp int64 `json:"started"`
 
 	// EndedTimestamp when this span ended
-	EndedTimestamp time.Time `json:"ended"`
+	EndedTimestamp int64 `json:"ended"`
+
+	// MaxFinishTime the max finish tiem of lambda
+	MaxFinishTime int64 `json:"maxFinishTime"`
 }

@@ -11,9 +11,12 @@ resource "aws_lambda_function" "otel" {
 
   role = aws_iam_role.lambda_exec.arn
 
+  layers = ["arn:aws:lambda:us-east-1:114300393969:layer:lumigo-tracer-extension:33"]
+
    environment {
     variables = {
       LUMIGO_DEBUG = "true"
+      LUMIGO_USE_TRACER_EXTENSION = "true"
     }
   }
 }
