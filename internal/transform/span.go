@@ -57,8 +57,8 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 		ID:               span.SpanContext().SpanID().String(),
 		TransactionID:    ksuid.New().String(),
 		ParentID:         parentSpanID,
-		StartedTimestamp: span.StartTime().Unix(),
-		EndedTimestamp:   span.EndTime().Unix(),
+		StartedTimestamp: span.StartTime().UnixMilli(),
+		EndedTimestamp:   span.EndTime().UnixMilli(),
 	}
 
 	lambdaCtx, lambdaOk := lambdacontext.FromContext(ctx)
@@ -72,7 +72,7 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 		lumigoSpan.Account = accountID
 
 		deadline, _ := ctx.Deadline()
-		lumigoSpan.MaxFinishTime = time.Now().Unix() - deadline.Unix()
+		lumigoSpan.MaxFinishTime = time.Now().UnixMilli() - deadline.UnixMilli()
 	} else {
 		logger.Error("unable to fetch from LambdaContext")
 	}

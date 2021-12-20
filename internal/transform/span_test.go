@@ -31,7 +31,6 @@ var (
 func TestTransform(t *testing.T) {
 	now := time.Now()
 	ctx := lambdacontext.NewContext(context.Background(), &mockLambdaContext)
-	deadline, _ := ctx.Deadline()
 	testcases := []struct {
 		testname string
 		input    *tracetest.SpanStub
@@ -57,9 +56,8 @@ func TestTransform(t *testing.T) {
 				LambdaContainerID: "123",
 				Account:           "account-id",
 				ID:                spanID.String(),
-				StartedTimestamp:  now.Unix(),
-				EndedTimestamp:    now.Add(1 * time.Second).Unix(),
-				MaxFinishTime:     now.Unix() - deadline.Unix(),
+				StartedTimestamp:  now.UnixMilli(),
+				EndedTimestamp:    now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -92,9 +90,8 @@ func TestTransform(t *testing.T) {
 					TraceID:       telemetry.SpanTraceRoot{},
 				},
 				ID:               spanID.String(),
-				StartedTimestamp: now.Unix(),
-				EndedTimestamp:   now.Add(1 * time.Second).Unix(),
-				MaxFinishTime:    now.Unix() - deadline.Unix(),
+				StartedTimestamp: now.UnixMilli(),
+				EndedTimestamp:   now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -127,9 +124,8 @@ func TestTransform(t *testing.T) {
 				LambdaContainerID: "123",
 				Account:           "account-id",
 				ID:                spanID.String(),
-				StartedTimestamp:  now.Unix(),
-				EndedTimestamp:    now.Add(1 * time.Second).Unix(),
-				MaxFinishTime:     now.Unix() - deadline.Unix(),
+				StartedTimestamp:  now.UnixMilli(),
+				EndedTimestamp:    now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -162,9 +158,8 @@ func TestTransform(t *testing.T) {
 				Event:             "test",
 				Account:           "account-id",
 				ID:                spanID.String(),
-				StartedTimestamp:  now.Unix(),
-				EndedTimestamp:    now.Add(1 * time.Second).Unix(),
-				MaxFinishTime:     now.Unix() - deadline.Unix(),
+				StartedTimestamp:  now.UnixMilli(),
+				EndedTimestamp:    now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -199,9 +194,8 @@ func TestTransform(t *testing.T) {
 				Event:             "test",
 				Account:           "account-id",
 				ID:                spanID.String(),
-				StartedTimestamp:  now.Unix(),
-				EndedTimestamp:    now.Add(1 * time.Second).Unix(),
-				MaxFinishTime:     now.Unix() - deadline.Unix(),
+				StartedTimestamp:  now.UnixMilli(),
+				EndedTimestamp:    now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -236,9 +230,8 @@ func TestTransform(t *testing.T) {
 				Event:             "test",
 				Account:           "account-id",
 				ID:                spanID.String(),
-				StartedTimestamp:  now.Unix(),
-				EndedTimestamp:    now.Add(1 * time.Second).Unix(),
-				MaxFinishTime:     now.Unix() - deadline.Unix(),
+				StartedTimestamp:  now.UnixMilli(),
+				EndedTimestamp:    now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -273,9 +266,8 @@ func TestTransform(t *testing.T) {
 				Event:             "test",
 				Account:           "account-id",
 				ID:                spanID.String(),
-				StartedTimestamp:  now.Unix(),
-				EndedTimestamp:    now.Add(1 * time.Second).Unix(),
-				MaxFinishTime:     now.Unix() - deadline.Unix(),
+				StartedTimestamp:  now.UnixMilli(),
+				EndedTimestamp:    now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -295,6 +287,8 @@ func TestTransform(t *testing.T) {
 		lumigoSpan.LambdaEnvVars = ""
 		// intentionally ignore generated transactionId
 		lumigoSpan.TransactionID = ""
+		// intentionally ignore MaxFinishTime, cannot be matched
+		lumigoSpan.MaxFinishTime = 0
 		if !reflect.DeepEqual(lumigoSpan, tc.expect) {
 			t.Errorf("%s: %#v != %#v", tc.testname, lumigoSpan, tc.expect)
 		}
