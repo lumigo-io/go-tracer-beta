@@ -86,10 +86,12 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 			otellambda.WithTracerProvider(tracerProvider),
 			otellambda.WithFlusher(tracerProvider)).Invoke(traceCtx, payload)
 
-		os.Setenv("IS_COLD_START", "true") // nolint
+		os.Setenv("IS_WARM_START", "true") // nolint
 
 		if eventErr == nil {
 			span.SetAttributes(attribute.String("event", string(data)))
+		} else {
+			logger.WithError(err).Error("failed to track event")
 		}
 
 		if data, err := json.Marshal(json.RawMessage(response)); err == nil {
@@ -137,9 +139,8 @@ func newExporter(printStdout bool, ctx context.Context, logger log.FieldLogger) 
 		return stdouttrace.New()
 	}
 	if _, err := os.Stat(SPANS_DIR); errors.Is(err, os.ErrNotExist) {
-		err := os.Mkdir(SPANS_DIR, os.ModePerm)
-		if err != nil {
-			log.Println(err)
+		if err := os.Mkdir(SPANS_DIR, os.ModePerm); err != nil {
+			return nil, errors.Wrapf(err, "failed to create dir: %s", SPANS_DIR)
 		}
 	}
 

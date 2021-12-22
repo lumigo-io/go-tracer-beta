@@ -17,7 +17,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	apitrace "go.opentelemetry.io/otel/trace"
 )
@@ -25,15 +24,8 @@ import (
 func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLogger) telemetry.Span {
 	numAttrs := len(span.Attributes()) + span.Resource().Len() + 2
 
-	// If kind has been set, make room for it.
 	if span.SpanKind() != apitrace.SpanKindUnspecified {
 		numAttrs++
-	}
-
-	// Status of Ok and Unset are not considered errors.
-	isError := span.Status().Code == codes.Error
-	if isError {
-		numAttrs += 2
 	}
 
 	attrs := make(map[string]interface{}, numAttrs)
@@ -75,14 +67,20 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 
 	if token, ok := attrs["lumigo_token"]; ok {
 		lumigoSpan.Token = fmt.Sprint(token)
+	} else {
+		logger.Error("unable to fetch lumigo token from span")
 	}
 
 	if event, ok := attrs["event"]; ok {
 		lumigoSpan.Event = fmt.Sprint(event)
+	} else {
+		logger.Error("unable to fetch lambda event from span")
 	}
 
 	if returnValue, ok := attrs["response"]; ok {
 		lumigoSpan.LambdaResponse = aws.String(fmt.Sprint(returnValue))
+	} else {
+		logger.Error("unable to fetch lambda response from span")
 	}
 
 	lumigoSpan.Region = os.Getenv("AWS_REGION")
@@ -91,6 +89,9 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 	lumigoSpan.LambdaName = os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
 
 	awsRoot := getAmazonTraceID()
+	if awsRoot == "" {
+		logger.Error("unable to fetch Amazon Trace ID")
+	}
 	lumigoSpan.SpanInfo = telemetry.SpanInfo{
 		LogStreamName: os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME"),
 		LogGroupName:  os.Getenv("AWS_LAMBDA_LOG_GROUP_NAME"),
@@ -110,8 +111,8 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 		logger.Error("unable to fetch from LumigoContext")
 	}
 
-	isColdStart := os.Getenv("IS_COLD_START")
-	if isColdStart == "" && !isProvisionConcurrencyInitialization() {
+	isWarmStart := os.Getenv("IS_WARM_START")
+	if isWarmStart == "" && !isProvisionConcurrencyInitialization() {
 		lumigoSpan.LambdaReadiness = "cold"
 	} else {
 		lumigoSpan.LambdaReadiness = "warm"

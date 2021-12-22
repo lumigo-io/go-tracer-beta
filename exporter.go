@@ -15,7 +15,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-// Exporter exports OpenTelemetry data to New Relic.
+// Exporter exports OpenTelemetry data to Lumigo.
 type Exporter struct {
 	context   context.Context
 	logger    logrus.FieldLogger

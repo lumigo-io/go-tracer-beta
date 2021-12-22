@@ -61,7 +61,7 @@ type Span struct {
 	// LambdaName the name of the lambda
 	LambdaName string `json:"name"`
 
-	// LambdaReadiness is if lambda is called or warmed already
+	// LambdaReadiness is if lambda is cold or warmed already
 	LambdaReadiness string `json:"readiness"`
 
 	// LambdaResponse the response of Lambda

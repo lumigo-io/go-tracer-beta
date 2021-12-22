@@ -127,11 +127,11 @@ func TestTransform(t *testing.T) {
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
-				os.Setenv("IS_COLD_START", "true")
+				os.Setenv("IS_WARM_START", "true")
 			},
 			after: func() {
 				os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
-				os.Unsetenv("IS_COLD_START")
+				os.Unsetenv("IS_WARM_START")
 			},
 		},
 		{
@@ -160,11 +160,11 @@ func TestTransform(t *testing.T) {
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
-				os.Setenv("IS_COLD_START", "true")
+				os.Setenv("IS_WARM_START", "true")
 			},
 			after: func() {
 				os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
-				os.Unsetenv("IS_COLD_START")
+				os.Unsetenv("IS_WARM_START")
 			},
 		},
 		{
@@ -195,11 +195,11 @@ func TestTransform(t *testing.T) {
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
-				os.Setenv("IS_COLD_START", "true")
+				os.Setenv("IS_WARM_START", "true")
 			},
 			after: func() {
 				os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
-				os.Unsetenv("IS_COLD_START")
+				os.Unsetenv("IS_WARM_START")
 			},
 		},
 		{
@@ -230,11 +230,11 @@ func TestTransform(t *testing.T) {
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
-				os.Setenv("IS_COLD_START", "true")
+				os.Setenv("IS_WARM_START", "true")
 			},
 			after: func() {
 				os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
-				os.Unsetenv("IS_COLD_START")
+				os.Unsetenv("IS_WARM_START")
 			},
 		},
 		{
@@ -265,11 +265,11 @@ func TestTransform(t *testing.T) {
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
-				os.Setenv("IS_COLD_START", "true")
+				os.Setenv("IS_WARM_START", "true")
 			},
 			after: func() {
 				os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
-				os.Unsetenv("IS_COLD_START")
+				os.Unsetenv("IS_WARM_START")
 			},
 		},
 	}

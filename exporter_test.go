@@ -31,8 +31,8 @@ func TestSetupExporterSuite(t *testing.T) {
 	suite.Run(t, &exporterTestSuite{})
 }
 
-func (conf *exporterTestSuite) TearDownTest() {
-	assert.NoError(conf.T(), deleteAllFiles())
+func (e *exporterTestSuite) TearDownTest() {
+	assert.NoError(e.T(), deleteAllFiles())
 }
 
 func (e *exporterTestSuite) TestNilExporter() {
