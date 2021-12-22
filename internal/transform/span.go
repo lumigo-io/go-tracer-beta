@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambdacontext"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go/aws/arn"
+	"github.com/google/uuid"
 	lumigoctx "github.com/lumigo-io/go-tracer/internal/context"
 	"github.com/lumigo-io/go-tracer/internal/telemetry"
 	"github.com/pkg/errors"
-	"github.com/segmentio/ksuid"
 	"github.com/sirupsen/logrus"
 
 	"go.opentelemetry.io/otel/codes"
@@ -49,21 +50,16 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 		attrs["span.kind"] = strings.ToLower(span.SpanKind().String())
 	}
 
-	parentSpanID := ""
-	if span.Parent().IsValid() {
-		parentSpanID = span.Parent().SpanID().String()
-	}
 	lumigoSpan := telemetry.Span{
-		ID:               span.SpanContext().SpanID().String(),
-		TransactionID:    ksuid.New().String(),
-		ParentID:         parentSpanID,
 		StartedTimestamp: span.StartTime().UnixMilli(),
 		EndedTimestamp:   span.EndTime().UnixMilli(),
 	}
 
 	lambdaCtx, lambdaOk := lambdacontext.FromContext(ctx)
 	if lambdaOk {
-		lumigoSpan.LambdaContainerID = lambdaCtx.AwsRequestID
+		uuid, _ := uuid.NewUUID()
+		lumigoSpan.LambdaContainerID = uuid.String()
+		lumigoSpan.ID = lambdaCtx.AwsRequestID
 
 		accountID, err := getAccountID(lambdaCtx)
 		if err != nil {
@@ -86,7 +82,7 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 	}
 
 	if returnValue, ok := attrs["response"]; ok {
-		lumigoSpan.LambdaResponse = fmt.Sprint(returnValue)
+		lumigoSpan.LambdaResponse = aws.String(fmt.Sprint(returnValue))
 	}
 
 	lumigoSpan.Region = os.Getenv("AWS_REGION")
@@ -94,13 +90,16 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 	lumigoSpan.Runtime = os.Getenv("AWS_EXECUTION_ENV")
 	lumigoSpan.LambdaName = os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
 
+	awsRoot := getAmazonTraceID()
 	lumigoSpan.SpanInfo = telemetry.SpanInfo{
 		LogStreamName: os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME"),
 		LogGroupName:  os.Getenv("AWS_LAMBDA_LOG_GROUP_NAME"),
 		TraceID: telemetry.SpanTraceRoot{
-			Root: getAmazonTraceID(),
+			Root: awsRoot,
 		},
 	}
+
+	lumigoSpan.TransactionID = getTransactionID(awsRoot)
 
 	lumigoCtx, lumigoOk := lumigoctx.FromContext(ctx)
 	if lumigoOk {
@@ -151,6 +150,14 @@ func getAmazonTraceID() string {
 	if len(awsTraceItems) > 1 {
 		root := strings.SplitN(awsTraceItems[0], "=", 2)
 		return root[1]
+	}
+	return ""
+}
+
+func getTransactionID(root string) string {
+	items := strings.SplitN(root, "-", 3)
+	if len(items) > 1 {
+		return items[2]
 	}
 	return ""
 }

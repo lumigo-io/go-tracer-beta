@@ -65,7 +65,7 @@ type Span struct {
 	LambdaReadiness string `json:"readiness"`
 
 	// LambdaResponse the response of Lambda
-	LambdaResponse string `json:"return_value"`
+	LambdaResponse *string `json:"return_value"`
 
 	// LambdaContainerID the id of the lambda container
 	LambdaContainerID string `json:"lambda_container_id"`

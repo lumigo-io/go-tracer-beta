@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambdacontext"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/lumigo-io/go-tracer/internal/telemetry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -30,7 +31,7 @@ func TestSetupExporterSuite(t *testing.T) {
 	suite.Run(t, &exporterTestSuite{})
 }
 
-func (conf *exporterTestSuite) AfterTest() {
+func (conf *exporterTestSuite) TearDownTest() {
 	assert.NoError(conf.T(), deleteAllFiles())
 }
 
@@ -42,6 +43,7 @@ func (e *exporterTestSuite) TestNilExporter() {
 }
 
 func (e *exporterTestSuite) TestExportSpans() {
+	logger.Out = ioutil.Discard
 	os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
 	os.Setenv("AWS_REGION", "us-east-1")
 	spanID, _ := oteltrace.SpanIDFromHex("83887e5d7da921ba")
@@ -118,8 +120,7 @@ func (e *exporterTestSuite) TestExportSpans() {
 	assert.NoError(e.T(), err)
 
 	lumigoStart := startSpans[0]
-	assert.Equal(e.T(), endSpan.SpanContext.SpanID().String(), lumigoStart.ID)
-	assert.Equal(e.T(), mockLambdaContext.AwsRequestID, lumigoStart.LambdaContainerID)
+	assert.Equal(e.T(), mockLambdaContext.AwsRequestID, lumigoStart.ID)
 	assert.Equal(e.T(), "account-id", lumigoStart.Account)
 
 	endSpans, err := readSpansFromFile(false)
@@ -128,9 +129,9 @@ func (e *exporterTestSuite) TestExportSpans() {
 	lumigoEnd := endSpans[0]
 	event := fmt.Sprint(endSpan.Attributes[0].Value.AsString())
 	response := fmt.Sprint(endSpan.Attributes[1].Value.AsString())
-	assert.Equal(e.T(), endSpan.SpanContext.SpanID().String(), lumigoEnd.ID)
+	assert.Equal(e.T(), mockLambdaContext.AwsRequestID, lumigoEnd.ID)
 	assert.Equal(e.T(), event, lumigoEnd.Event)
-	assert.Equal(e.T(), response, lumigoEnd.LambdaResponse)
+	assert.Equal(e.T(), aws.String(response), lumigoEnd.LambdaResponse)
 	assert.Equal(e.T(), endSpan.Resource.Attributes()[0].Value.AsString(), lumigoEnd.Region)
 	assert.Equal(e.T(), endSpan.Resource.Attributes()[1].Value.AsString(), lumigoEnd.Token)
 

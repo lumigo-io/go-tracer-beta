@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambdacontext"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/lumigo-io/go-tracer/internal/telemetry"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/attribute"
@@ -50,14 +51,13 @@ func TestTransform(t *testing.T) {
 				Name:      "test",
 			},
 			expect: telemetry.Span{
-				LambdaName:        "test",
-				LambdaType:        "function",
-				LambdaReadiness:   "cold",
-				LambdaContainerID: "123",
-				Account:           "account-id",
-				ID:                spanID.String(),
-				StartedTimestamp:  now.UnixMilli(),
-				EndedTimestamp:    now.Add(1 * time.Second).UnixMilli(),
+				LambdaName:       "test",
+				LambdaType:       "function",
+				LambdaReadiness:  "cold",
+				Account:          "account-id",
+				ID:               mockLambdaContext.AwsRequestID,
+				StartedTimestamp: now.UnixMilli(),
+				EndedTimestamp:   now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -78,18 +78,17 @@ func TestTransform(t *testing.T) {
 				Name:      "test",
 			},
 			expect: telemetry.Span{
-				LambdaName:        "test",
-				LambdaType:        "function",
-				LambdaReadiness:   "cold",
-				LambdaContainerID: "123",
-				Runtime:           "go",
-				Account:           "account-id",
+				LambdaName:      "test",
+				LambdaType:      "function",
+				LambdaReadiness: "cold",
+				Runtime:         "go",
+				Account:         "account-id",
 				SpanInfo: telemetry.SpanInfo{
 					LogStreamName: "2021/12/06/[$LATEST]2f4f26a6224b421c86bc4570bb7bf84b",
 					LogGroupName:  "/aws/lambda/helloworld-37",
 					TraceID:       telemetry.SpanTraceRoot{},
 				},
-				ID:               spanID.String(),
+				ID:               mockLambdaContext.AwsRequestID,
 				StartedTimestamp: now.UnixMilli(),
 				EndedTimestamp:   now.Add(1 * time.Second).UnixMilli(),
 			},
@@ -118,14 +117,13 @@ func TestTransform(t *testing.T) {
 				Name:      "test",
 			},
 			expect: telemetry.Span{
-				LambdaName:        "test",
-				LambdaType:        "function",
-				LambdaReadiness:   "warm",
-				LambdaContainerID: "123",
-				Account:           "account-id",
-				ID:                spanID.String(),
-				StartedTimestamp:  now.UnixMilli(),
-				EndedTimestamp:    now.Add(1 * time.Second).UnixMilli(),
+				LambdaName:       "test",
+				LambdaType:       "function",
+				LambdaReadiness:  "warm",
+				Account:          "account-id",
+				ID:               mockLambdaContext.AwsRequestID,
+				StartedTimestamp: now.UnixMilli(),
+				EndedTimestamp:   now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -151,15 +149,14 @@ func TestTransform(t *testing.T) {
 				},
 			},
 			expect: telemetry.Span{
-				LambdaName:        "test",
-				LambdaType:        "function",
-				LambdaReadiness:   "warm",
-				LambdaContainerID: "123",
-				Event:             "test",
-				Account:           "account-id",
-				ID:                spanID.String(),
-				StartedTimestamp:  now.UnixMilli(),
-				EndedTimestamp:    now.Add(1 * time.Second).UnixMilli(),
+				LambdaName:       "test",
+				LambdaType:       "function",
+				LambdaReadiness:  "warm",
+				Event:            "test",
+				Account:          "account-id",
+				ID:               mockLambdaContext.AwsRequestID,
+				StartedTimestamp: now.UnixMilli(),
+				EndedTimestamp:   now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -186,16 +183,15 @@ func TestTransform(t *testing.T) {
 				},
 			},
 			expect: telemetry.Span{
-				LambdaName:        "test",
-				LambdaType:        "function",
-				LambdaReadiness:   "warm",
-				LambdaResponse:    "test2",
-				LambdaContainerID: "123",
-				Event:             "test",
-				Account:           "account-id",
-				ID:                spanID.String(),
-				StartedTimestamp:  now.UnixMilli(),
-				EndedTimestamp:    now.Add(1 * time.Second).UnixMilli(),
+				LambdaName:       "test",
+				LambdaType:       "function",
+				LambdaReadiness:  "warm",
+				LambdaResponse:   aws.String("test2"),
+				Event:            "test",
+				Account:          "account-id",
+				ID:               mockLambdaContext.AwsRequestID,
+				StartedTimestamp: now.UnixMilli(),
+				EndedTimestamp:   now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -222,16 +218,15 @@ func TestTransform(t *testing.T) {
 				},
 			},
 			expect: telemetry.Span{
-				LambdaName:        "test",
-				LambdaType:        "function",
-				LambdaReadiness:   "warm",
-				LambdaResponse:    "test2",
-				LambdaContainerID: "123",
-				Event:             "test",
-				Account:           "account-id",
-				ID:                spanID.String(),
-				StartedTimestamp:  now.UnixMilli(),
-				EndedTimestamp:    now.Add(1 * time.Second).UnixMilli(),
+				LambdaName:       "test",
+				LambdaType:       "function",
+				LambdaReadiness:  "warm",
+				LambdaResponse:   aws.String("test2"),
+				Event:            "test",
+				Account:          "account-id",
+				ID:               mockLambdaContext.AwsRequestID,
+				StartedTimestamp: now.UnixMilli(),
+				EndedTimestamp:   now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -258,16 +253,15 @@ func TestTransform(t *testing.T) {
 				},
 			},
 			expect: telemetry.Span{
-				LambdaName:        "test",
-				LambdaType:        "http",
-				LambdaReadiness:   "warm",
-				LambdaResponse:    "test2",
-				LambdaContainerID: "123",
-				Event:             "test",
-				Account:           "account-id",
-				ID:                spanID.String(),
-				StartedTimestamp:  now.UnixMilli(),
-				EndedTimestamp:    now.Add(1 * time.Second).UnixMilli(),
+				LambdaName:       "test",
+				LambdaType:       "http",
+				LambdaReadiness:  "warm",
+				LambdaResponse:   aws.String("test2"),
+				Event:            "test",
+				Account:          "account-id",
+				ID:               mockLambdaContext.AwsRequestID,
+				StartedTimestamp: now.UnixMilli(),
+				EndedTimestamp:   now.Add(1 * time.Second).UnixMilli(),
 			},
 			before: func() {
 				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
@@ -285,8 +279,8 @@ func TestTransform(t *testing.T) {
 		lumigoSpan := Span(ctx, tc.input.Snapshot(), logrus.New())
 		// intentionally ignore CI and Local envs
 		lumigoSpan.LambdaEnvVars = ""
-		// intentionally ignore generated transactionId
-		lumigoSpan.TransactionID = ""
+		// intentionally ignore generated LambdaContainerID
+		lumigoSpan.LambdaContainerID = ""
 		// intentionally ignore MaxFinishTime, cannot be matched
 		lumigoSpan.MaxFinishTime = 0
 		if !reflect.DeepEqual(lumigoSpan, tc.expect) {
