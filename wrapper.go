@@ -56,7 +56,7 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 			TracerVersion: version,
 		})
 
-		exporter, err := newExporter(cfg.PrintStdout, ctx, logger)
+		exporter, err := createExporter(cfg.PrintStdout, ctx, logger)
 		if err != nil {
 			return lambda.NewHandler(handler).Invoke(ctx, payload)
 		}
@@ -133,8 +133,8 @@ func newResource(ctx context.Context, extraAttrs ...attribute.KeyValue) *resourc
 	return r
 }
 
-// newExporter returns a console exporter.
-func newExporter(printStdout bool, ctx context.Context, logger log.FieldLogger) (trace.SpanExporter, error) {
+// createExporter returns a console exporter.
+func createExporter(printStdout bool, ctx context.Context, logger log.FieldLogger) (trace.SpanExporter, error) {
 	if printStdout {
 		return stdouttrace.New()
 	}
@@ -142,7 +142,9 @@ func newExporter(printStdout bool, ctx context.Context, logger log.FieldLogger) 
 		if err := os.Mkdir(SPANS_DIR, os.ModePerm); err != nil {
 			return nil, errors.Wrapf(err, "failed to create dir: %s", SPANS_DIR)
 		}
+	} else if err != nil {
+		logger.WithError(err).Error()
 	}
 
-	return NewExporter(ctx, logger)
+	return newExporter(ctx, logger)
 }

@@ -26,7 +26,7 @@ type Exporter struct {
 }
 
 // New creates an Exporter with the passed options.
-func NewExporter(ctx context.Context, logger logrus.FieldLogger) (*Exporter, error) {
+func newExporter(ctx context.Context, logger logrus.FieldLogger) (*Exporter, error) {
 	return &Exporter{
 		logger:  logger,
 		context: ctx,

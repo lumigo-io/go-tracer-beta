@@ -100,7 +100,11 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 		},
 	}
 
-	lumigoSpan.TransactionID = getTransactionID(awsRoot)
+	if transactionID := getTransactionID(awsRoot); transactionID != "" {
+		lumigoSpan.TransactionID = transactionID
+	} else {
+		logger.Error("unable to fetch transaction ID")
+	}
 
 	lumigoCtx, lumigoOk := lumigoctx.FromContext(ctx)
 	if lumigoOk {

@@ -107,7 +107,7 @@ func (e *exporterTestSuite) TestExportSpans() {
 	}
 
 	testContext := lambdacontext.NewContext(context.Background(), &mockLambdaContext)
-	exp, err := newExporter(false, testContext, logger)
+	exp, err := createExporter(false, testContext, logger)
 	assert.NoError(e.T(), err)
 
 	err = exp.ExportSpans(context.Background(), []trace.ReadOnlySpan{

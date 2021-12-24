@@ -143,7 +143,7 @@ func TestLambdaHandlerSignatures(t *testing.T) {
 
 // setTestProvider creates a provider
 func getTestProvider() (*sdktrace.TracerProvider, error) {
-	exporter, err := newExporter(cfg.PrintStdout, context.Background(), logger)
+	exporter, err := createExporter(cfg.PrintStdout, context.Background(), logger)
 	if err != nil {
 		return nil, err
 	}
