@@ -16,7 +16,7 @@ func TestSetupConfSuite(t *testing.T) {
 	suite.Run(t, &configTestSuite{})
 }
 
-func (conf *configTestSuite) AfterTest() {
+func (conf *configTestSuite) TearDownTest() {
 	os.Unsetenv("LUMIGO_TOKEN")
 	os.Unsetenv("LUMIGO_DEBUG")
 	os.Unsetenv("LUMIGO_ENABLED")

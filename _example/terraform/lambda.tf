@@ -10,6 +10,15 @@ resource "aws_lambda_function" "otel" {
   source_code_hash = data.archive_file.lambda_otel.output_base64sha256
 
   role = aws_iam_role.lambda_exec.arn
+
+  layers = ["arn:aws:lambda:us-east-1:114300393969:layer:lumigo-tracer-extension:33"]
+
+   environment {
+    variables = {
+      LUMIGO_DEBUG = "true"
+      LUMIGO_USE_TRACER_EXTENSION = "true"
+    }
+  }
 }
 
 resource "aws_cloudwatch_log_group" "otel" {

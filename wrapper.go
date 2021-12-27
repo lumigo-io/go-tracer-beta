@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	lumigoctx "github.com/lumigo-io/go-tracer/internal/context"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	easy "github.com/t-tomalak/logrus-easy-formatter"
@@ -16,14 +17,19 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
+const SPANS_DIR = "/tmp/lumigo-spans"
+
 var logger *log.Logger
+
+const (
+	version = "0.1.0"
+)
 
 func init() {
 	logger = log.New()
@@ -44,26 +50,35 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 	if !cfg.debug {
 		logger.Out = io.Discard
 	}
-	exporter, err := newExporter(cfg.PrintStdout)
-	if err != nil {
-		logger.WithError(err).Error("failed to create an exporter")
-		return handler
-	}
-	ctx := context.Background()
-
-	var tracerProvider *trace.TracerProvider
-	if conf.tracerProvider == nil {
-		tracerProvider = trace.NewTracerProvider(
-			trace.WithSpanProcessor(trace.NewBatchSpanProcessor(exporter)),
-			trace.WithResource(newResource(ctx)),
-		)
-	} else {
-		tracerProvider = conf.tracerProvider
-	}
-	otel.SetTracerProvider(tracerProvider)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	return func(ctx context.Context, payload json.RawMessage) (interface{}, error) {
+		ctx = lumigoctx.NewContext(ctx, &lumigoctx.LumigoContext{
+			TracerVersion: version,
+		})
+
+		exporter, err := createExporter(cfg.PrintStdout, ctx, logger)
+		if err != nil {
+			return lambda.NewHandler(handler).Invoke(ctx, payload)
+		}
+
+		data, eventErr := json.Marshal(&payload)
+		if eventErr != nil {
+			logger.WithError(err).Error("failed to track event")
+		}
+		var tracerProvider *trace.TracerProvider
+		if conf.tracerProvider == nil {
+			tracerProvider = trace.NewTracerProvider(
+				trace.WithSyncer(exporter),
+				trace.WithResource(newResource(ctx,
+					attribute.String("event", string(data)),
+				)),
+			)
+		} else {
+			tracerProvider = conf.tracerProvider
+		}
+		otel.SetTracerProvider(tracerProvider)
+
+		defer tracerProvider.ForceFlush(ctx)
 		traceCtx, span := tracerProvider.Tracer("lumigo").Start(ctx, "LumigoParentSpan")
 		defer span.End()
 
@@ -71,7 +86,9 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 			otellambda.WithTracerProvider(tracerProvider),
 			otellambda.WithFlusher(tracerProvider)).Invoke(traceCtx, payload)
 
-		if data, err := json.Marshal(&payload); err == nil {
+		os.Setenv("IS_WARM_START", "true") // nolint
+
+		if eventErr == nil {
 			span.SetAttributes(attribute.String("event", string(data)))
 		} else {
 			logger.WithError(err).Error("failed to track event")
@@ -98,10 +115,11 @@ func WrapHandlerWithAWSConfig(handler interface{}, cfg *Config, awsConfig *aws.C
 }
 
 // newResource returns a resource describing this application.
-func newResource(ctx context.Context) *resource.Resource {
+func newResource(ctx context.Context, extraAttrs ...attribute.KeyValue) *resource.Resource {
 	attrs := []attribute.KeyValue{
 		attribute.String("lumigo_token", cfg.Token),
 	}
+	attrs = append(attrs, extraAttrs...)
 	detector := lambdadetector.NewResourceDetector()
 	res, err := detector.Detect(ctx)
 	if err != nil {
@@ -115,17 +133,18 @@ func newResource(ctx context.Context) *resource.Resource {
 	return r
 }
 
-// newExporter returns a console exporter.
-func newExporter(printStdout bool) (trace.SpanExporter, error) {
+// createExporter returns a console exporter.
+func createExporter(printStdout bool, ctx context.Context, logger log.FieldLogger) (trace.SpanExporter, error) {
 	if printStdout {
 		return stdouttrace.New()
 	}
-	w, err := os.Create("/tmp/lumigo_tracing.json")
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create data store")
+	if _, err := os.Stat(SPANS_DIR); errors.Is(err, os.ErrNotExist) {
+		if err := os.Mkdir(SPANS_DIR, os.ModePerm); err != nil {
+			return nil, errors.Wrapf(err, "failed to create dir: %s", SPANS_DIR)
+		}
+	} else if err != nil {
+		logger.WithError(err).Error()
 	}
 
-	return stdouttrace.New(
-		stdouttrace.WithWriter(w),
-	)
+	return newExporter(ctx, logger)
 }
