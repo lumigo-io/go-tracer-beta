@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda/messages"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
@@ -33,13 +35,34 @@ type expected struct {
 	err error
 }
 
-func TestLambdaHandlerSignatures(t *testing.T) {
-	// logger.Out = io.Discard
+type wrapperTestSuite struct {
+	suite.Suite
+}
 
+func TestSetupWrapperSuite(t *testing.T) {
+	suite.Run(t, &wrapperTestSuite{})
+}
+
+func (w *wrapperTestSuite) SetupTest() {
+	logger.Out = io.Discard
 	_ = os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "testFunction")
-	_ = os.Setenv("AWS_REGION", "us-texas-1")
+	_ = os.Setenv("AWS_REGION", "us-east-1")
 	_ = os.Setenv("AWS_LAMBDA_FUNCTION_VERSION", "$LATEST")
+	_ = os.Setenv("AWS_LAMBDA_LOG_STREAM_NAME", "2021/12/06/[$LATEST]2f4f26a6224b421c86bc4570bb7bf84b")
+	_ = os.Setenv("AWS_LAMBDA_LOG_GROUP_NAME", "/aws/lambda/helloworld-37")
+	_ = os.Setenv("AWS_EXECUTION_ENV", "go")
 	_ = os.Setenv("_X_AMZN_TRACE_ID", "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=1")
+}
+
+func (w *wrapperTestSuite) TearDownTest() {
+	_ = os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
+	_ = os.Unsetenv("AWS_REGION")
+	_ = os.Unsetenv("AWS_LAMBDA_FUNCTION_VERSION")
+	_ = os.Unsetenv("_X_AMZN_TRACE_ID")
+}
+
+func (w *wrapperTestSuite) TestLambdaHandlerSignatures() {
+
 	hello := func(s string) string {
 		return fmt.Sprintf("Hello %s!", s)
 	}
@@ -118,10 +141,10 @@ func TestLambdaHandlerSignatures(t *testing.T) {
 	// test invocation via a Handler
 	for i, testCase := range testCases {
 		testCase := testCase
-		t.Run(fmt.Sprintf("handlerTestCase[%d] %s", i, testCase.name), func(t *testing.T) {
+		w.T().Run(fmt.Sprintf("handlerTestCase[%d] %s", i, testCase.name), func(t *testing.T) {
 			inputPayload, _ := json.Marshal(testCase.input)
 
-			tp, err := getTestProvider()
+			tp, err := getTestProvider(mockContext)
 			assert.Nil(t, err)
 
 			lambdaHandler := WrapHandler(testCase.handler, &Config{Token: "token", tracerProvider: tp})
@@ -138,18 +161,95 @@ func TestLambdaHandlerSignatures(t *testing.T) {
 				assert.Equal(t, testCase.expected.val, string(responseValMarshalled))
 			}
 		})
+		assert.NoError(w.T(), deleteAllFiles())
+	}
+}
+
+func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
+	hello := func(s string) string {
+		return fmt.Sprintf("Hello %s!", s)
+	}
+	testCases := []struct {
+		name     string
+		input    interface{}
+		expected expected
+		handler  interface{}
+	}{
+		{
+			name:     "input: string, with context",
+			input:    "test",
+			expected: expected{`"Hello test!"`, nil},
+			handler: func(ctx context.Context, name string) (string, error) {
+				return hello(name), nil
+			},
+		},
+		{
+			name:     "input: struct event, response as struct",
+			input:    9090,
+			expected: expected{`{"Port":9090}`, nil},
+			handler: func(event int) (struct{ Port int }, error) {
+				return struct{ Port int }{event}, nil
+			},
+		},
+	}
+	testContext := lambdacontext.NewContext(mockContext, &mockLambdaContext)
+	for i, testCase := range testCases {
+		w.T().Run(fmt.Sprintf("handlerTestCase[%d] %s", i, testCase.name), func(t *testing.T) {
+
+			inputPayload, _ := json.Marshal(testCase.input)
+			lambdaHandler := WrapHandler(testCase.handler, &Config{Token: "token"})
+
+			handler := reflect.ValueOf(lambdaHandler)
+			_ = handler.Call([]reflect.Value{reflect.ValueOf(testContext), reflect.ValueOf(inputPayload)})
+
+			spans, err := readSpansFromFile(true)
+			assert.NoError(w.T(), err)
+
+			lumigoStart := spans[0]
+			assert.Equal(w.T(), "account-id", lumigoStart.Account)
+			assert.Equal(w.T(), "token", lumigoStart.Token)
+			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), lumigoStart.LambdaName)
+			assert.Equal(w.T(), "function", lumigoStart.LambdaType)
+			assert.Equal(w.T(), "go", lumigoStart.Runtime)
+			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME"), lumigoStart.SpanInfo.LogStreamName)
+			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_LOG_GROUP_NAME"), lumigoStart.SpanInfo.LogGroupName)
+			assert.Equal(w.T(), "1-5759e988-bd862e3fe1be46a994272793", lumigoStart.SpanInfo.TraceID.Root)
+			assert.Equal(w.T(), os.Getenv("AWS_REGION"), lumigoStart.Region)
+			assert.Equal(w.T(), "bd862e3fe1be46a994272793", lumigoStart.TransactionID)
+			assert.Equal(w.T(), string(inputPayload), lumigoStart.Event)
+			assert.Equal(w.T(), version, lumigoStart.SpanInfo.TracerVersion.Version)
+
+			spans, err = readSpansFromFile(false)
+			assert.NoError(w.T(), err)
+			lumigoEnd := spans[0]
+			assert.Equal(w.T(), "account-id", lumigoEnd.Account)
+			assert.Equal(w.T(), "token", lumigoEnd.Token)
+			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), lumigoEnd.LambdaName)
+			assert.Equal(w.T(), "function", lumigoEnd.LambdaType)
+			assert.Equal(w.T(), "go", lumigoEnd.Runtime)
+			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME"), lumigoEnd.SpanInfo.LogStreamName)
+			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_LOG_GROUP_NAME"), lumigoEnd.SpanInfo.LogGroupName)
+			assert.Equal(w.T(), "1-5759e988-bd862e3fe1be46a994272793", lumigoEnd.SpanInfo.TraceID.Root)
+			assert.Equal(w.T(), os.Getenv("AWS_REGION"), lumigoEnd.Region)
+			assert.Equal(w.T(), "bd862e3fe1be46a994272793", lumigoEnd.TransactionID)
+			assert.Equal(w.T(), string(inputPayload), lumigoEnd.Event)
+			assert.Equal(w.T(), testCase.expected.val, *lumigoEnd.LambdaResponse)
+			assert.Equal(w.T(), version, lumigoStart.SpanInfo.TracerVersion.Version)
+		})
+
+		assert.NoError(w.T(), deleteAllFiles())
 	}
 }
 
 // setTestProvider creates a provider
-func getTestProvider() (*sdktrace.TracerProvider, error) {
+func getTestProvider(ctx context.Context) (*sdktrace.TracerProvider, error) {
 	exporter, err := createExporter(cfg.PrintStdout, context.Background(), logger)
 	if err != nil {
 		return nil, err
 	}
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithSpanProcessor(sdktrace.NewSimpleSpanProcessor(exporter)), //needed for synchronous writing and testing
-		sdktrace.WithResource(newResource(context.TODO())),
+		sdktrace.WithResource(newResource(ctx)),
 	)
 	return tracerProvider, nil
 }
