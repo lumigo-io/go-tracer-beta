@@ -33,7 +33,7 @@ jobs:
     steps:
       - run: |
           git log --oneline > changelog.md
-          gh release create $CIRCLE_TAG -F changelog.md
+          gh release create v1.0 -F changelog.md
 
 workflows:
   version: 2
@@ -52,7 +52,4 @@ workflows:
 
   release:
     jobs:
-    - create-push-release:
-        filters:
-          tags:
-            only: /^v.*/
+    - create-push-release
