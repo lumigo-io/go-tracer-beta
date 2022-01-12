@@ -31,15 +31,13 @@ jobs:
     executor:
       name: default
     steps:
-    - gh/install
+    - gh/setup
     - checkout
     - run: |
         git log --oneline > changelog.md
         gh release create v1.0 -F changelog.md
 
 workflows:
-  version: 2
-  
   ci-build:
     jobs:
     - checks
