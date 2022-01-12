@@ -31,6 +31,7 @@ jobs:
     executor:
       name: default
     steps:
+    - gh/install
     - checkout
     - run: |
         git log --oneline > changelog.md
