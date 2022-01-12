@@ -52,4 +52,7 @@ workflows:
 
   release:
     jobs:
-    - create-push-release
+    - create-push-release:
+        filters:
+          tags:
+            only: /^v.*/ 
