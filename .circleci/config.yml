@@ -53,8 +53,6 @@ workflows:
   release:
     jobs:
     - create-push-release:
-        context:
-          - GITHUB_CREDS
         filters:
           tags:
             only: /^v.*/
