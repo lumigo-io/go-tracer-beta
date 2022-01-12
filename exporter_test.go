@@ -116,17 +116,14 @@ func (e *exporterTestSuite) TestExportSpans() {
 	})
 	assert.NoError(e.T(), err)
 
-	startSpans, err := readSpansFromFile(true)
+	container, err := readSpansFromFile()
 	assert.NoError(e.T(), err)
 
-	lumigoStart := startSpans[0]
+	lumigoStart := container.startSpan[0]
 	assert.Equal(e.T(), mockLambdaContext.AwsRequestID, lumigoStart.ID)
 	assert.Equal(e.T(), "account-id", lumigoStart.Account)
 
-	endSpans, err := readSpansFromFile(false)
-	assert.NoError(e.T(), err)
-
-	lumigoEnd := endSpans[0]
+	lumigoEnd := container.endSpan[0]
 	event := fmt.Sprint(endSpan.Attributes[0].Value.AsString())
 	response := fmt.Sprint(endSpan.Attributes[1].Value.AsString())
 	assert.Equal(e.T(), mockLambdaContext.AwsRequestID, lumigoEnd.ID)
@@ -137,28 +134,36 @@ func (e *exporterTestSuite) TestExportSpans() {
 
 }
 
-func readSpansFromFile(isStartSpan bool) ([]telemetry.Span, error) {
+type spanContainer struct {
+	startSpan []telemetry.Span
+	endSpan   []telemetry.Span
+}
+
+func readSpansFromFile() (spanContainer, error) {
 	files, err := ioutil.ReadDir(SPANS_DIR)
 	if err != nil {
-		return []telemetry.Span{}, err
+		return spanContainer{}, err
 	}
 
-	var spans []telemetry.Span
+	var container spanContainer
 	for _, file := range files {
+		var spans []telemetry.Span
 		content, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", SPANS_DIR, file.Name()))
 		if err != nil {
-			return []telemetry.Span{}, err
+			return spanContainer{}, err
 		}
 		err = json.Unmarshal(content, &spans)
 		if err != nil {
-			return []telemetry.Span{}, err
+			return spanContainer{}, err
 		}
-
-		if strings.Contains(file.Name(), "_span") && isStartSpan {
-			break
+		fmt.Println(file.Name())
+		if strings.Contains(file.Name(), "_span") {
+			container.startSpan = spans
+			continue
 		}
+		container.endSpan = spans
 	}
-	return spans, nil
+	return container, nil
 }
 
 func deleteAllFiles() error {
