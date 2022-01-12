@@ -57,6 +57,8 @@ func (w *wrapperTestSuite) SetupTest() {
 func (w *wrapperTestSuite) TearDownTest() {
 	_ = os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
 	_ = os.Unsetenv("AWS_REGION")
+	_ = os.Unsetenv("AWS_LAMBDA_LOG_STREAM_NAME")
+	_ = os.Unsetenv("AWS_LAMBDA_LOG_GROUP_NAME")
 	_ = os.Unsetenv("AWS_LAMBDA_FUNCTION_VERSION")
 	_ = os.Unsetenv("_X_AMZN_TRACE_ID")
 }
