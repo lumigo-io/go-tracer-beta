@@ -31,9 +31,10 @@ jobs:
     executor:
       name: default
     steps:
-      - run: |
-          git log --oneline > changelog.md
-          gh release create v1.0 -F changelog.md
+    - checkout
+    - run: |
+        git log --oneline > changelog.md
+        gh release create v1.0 -F changelog.md
 
 workflows:
   version: 2
