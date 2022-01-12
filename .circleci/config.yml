@@ -4,6 +4,9 @@ executors:
     docker:
     - image: circleci/golang:1.17
 
+orbs:
+  gh: circleci/github-cli@1.0
+
 aliases:
 - &restore_cache
   restore_cache:
@@ -23,10 +26,18 @@ jobs:
     - *restore_cache
     - run: make checks
     - *save_cache
+  
+  create-push-release:
+    executor:
+      name: default
+    steps:
+    - gh/setup
+    - checkout
+    - run: |
+        git log --oneline > changelog.md
+        gh release create v1.0 -F changelog.md
 
 workflows:
-  version: 2
-  
   ci-build:
     jobs:
     - checks
@@ -38,3 +49,10 @@ workflows:
           branches:
             only:
             - master
+
+  release:
+    jobs:
+    - create-push-release:
+        filters:
+          tags:
+            only: /^v.*/ 
