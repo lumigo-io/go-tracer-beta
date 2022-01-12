@@ -116,7 +116,7 @@ func (e *exporterTestSuite) TestExportSpans() {
 	})
 	assert.NoError(e.T(), err)
 
-	container, err := readSpansFromFile(true)
+	container, err := readSpansFromFile()
 	assert.NoError(e.T(), err)
 
 	lumigoStart := container.startSpan[0]
@@ -139,7 +139,7 @@ type spanContainer struct {
 	endSpan   []telemetry.Span
 }
 
-func readSpansFromFile(isStartSpan bool) (spanContainer, error) {
+func readSpansFromFile() (spanContainer, error) {
 	files, err := ioutil.ReadDir(SPANS_DIR)
 	if err != nil {
 		return spanContainer{}, err
@@ -157,7 +157,7 @@ func readSpansFromFile(isStartSpan bool) (spanContainer, error) {
 			return spanContainer{}, err
 		}
 		fmt.Println(file.Name())
-		if strings.Contains(file.Name(), "_span") && isStartSpan {
+		if strings.Contains(file.Name(), "_span") {
 			container.startSpan = spans
 			continue
 		}

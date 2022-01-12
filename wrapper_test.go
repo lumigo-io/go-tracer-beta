@@ -204,7 +204,7 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 			handler := reflect.ValueOf(lambdaHandler)
 			_ = handler.Call([]reflect.Value{reflect.ValueOf(testContext), reflect.ValueOf(inputPayload)})
 
-			spans, err := readSpansFromFile(true)
+			spans, err := readSpansFromFile()
 			assert.NoError(w.T(), err)
 
 			lumigoStart := spans.startSpan[0]
@@ -221,8 +221,6 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 			assert.Equal(w.T(), string(inputPayload), lumigoStart.Event)
 			assert.Equal(w.T(), version, lumigoStart.SpanInfo.TracerVersion.Version)
 
-			spans, err = readSpansFromFile(false)
-			assert.NoError(w.T(), err)
 			lumigoEnd := spans.endSpan[0]
 			assert.Equal(w.T(), "account-id", lumigoEnd.Account)
 			assert.Equal(w.T(), "token", lumigoEnd.Token)
@@ -235,7 +233,9 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 			assert.Equal(w.T(), os.Getenv("AWS_REGION"), lumigoEnd.Region)
 			assert.Equal(w.T(), "bd862e3fe1be46a994272793", lumigoEnd.TransactionID)
 			assert.Equal(w.T(), string(inputPayload), lumigoEnd.Event)
-			assert.Equal(w.T(), testCase.expected.val, lumigoEnd.LambdaResponse)
+			assert.NotNil(w.T(), lumigoEnd.LambdaResponse)
+			fmt.Println(*lumigoEnd.LambdaResponse)
+			assert.Equal(w.T(), testCase.expected.val, *lumigoEnd.LambdaResponse)
 			assert.Equal(w.T(), version, lumigoStart.SpanInfo.TracerVersion.Version)
 		})
 
