@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"reflect"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -94,15 +95,17 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 			logger.WithError(err).Error("failed to track event")
 		}
 
-		if data, err := json.Marshal(json.RawMessage(response)); err == nil {
+		if data, err := json.Marshal(json.RawMessage(response)); err == nil && lambdaErr == nil {
 			span.SetAttributes(attribute.String("response", string(data)))
 		} else {
 			logger.WithError(err).Error("failed to track response")
 		}
 
 		if lambdaErr != nil {
-			span.SetAttributes(attribute.String("exception", lambdaErr.Error()))
-			return json.RawMessage(response), lambdaErr
+			span.SetAttributes(attribute.String("error_type", reflect.TypeOf(lambdaErr).String()))
+			span.SetAttributes(attribute.String("error_message", lambdaErr.Error()))
+			span.SetAttributes(attribute.String("error_stacktrace", takeStacktrace(64, 0)))
+			return nil, lambdaErr
 		}
 		return json.RawMessage(response), lambdaErr
 	}

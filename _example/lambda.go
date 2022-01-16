@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -64,7 +66,19 @@ func HandleRequest(ctx context.Context, name MyEvent) (string, error) {
 	// for _, bucket := range result.Buckets {
 	// 	log.Println(*bucket.Name + ": " + bucket.CreationDate.Format("2006-01-02 15:04:05 Monday"))
 	// }
-	return fmt.Sprintf("Hello %s!", name.Name), nil
+	response := fmt.Sprintf("Hello %s!", name.Name)
+	returnErr, ok := os.LookupEnv("RETURN_ERROR")
+	if !ok {
+		return response, nil
+	}
+	isReturnErr, err := strconv.ParseBool(returnErr)
+	if err != nil {
+		return response, nil
+	}
+	if isReturnErr {
+		return "", errors.New("failed error")
+	}
+	return response, nil
 }
 
 func main() {

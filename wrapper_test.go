@@ -139,6 +139,22 @@ func (w *wrapperTestSuite) TestLambdaHandlerSignatures() {
 				return struct{ Port int }{event}, nil
 			},
 		},
+		{
+			name:     "input: struct event, with error string",
+			input:    9090,
+			expected: expected{"", errors.New("failed error")},
+			handler: func(event int) (struct{ Port int }, error) {
+				return struct{ Port int }{}, errors.New("failed error")
+			},
+		},
+		{
+			name:     "input: struct event, with error string",
+			input:    9090,
+			expected: expected{"", &os.SyscallError{Err: errors.New("fail")}},
+			handler: func(event int) (struct{ Port int }, error) {
+				return struct{ Port int }{}, &os.SyscallError{Err: errors.New("fail")}
+			},
+		},
 	}
 	// test invocation via a Handler
 	for i, testCase := range testCases {

@@ -19,6 +19,21 @@ type SpanInfo struct {
 	TracerVersion TracerVersion `json:"tracer"`
 }
 
+// SpanError the extra info if lambda returned
+// an error
+type SpanError struct {
+	Type       string `json:"type"`
+	Message    string `json:"message"`
+	Stacktrace string `json:"stacktrace"`
+}
+
+func (s SpanError) IsEmpty() bool {
+	if s.Type == "" && s.Message == "" && s.Stacktrace == "" {
+		return true
+	}
+	return false
+}
+
 // Span is a distributed tracing span.
 type Span struct {
 	// Required Fields:
@@ -81,4 +96,7 @@ type Span struct {
 
 	// MaxFinishTime the max finish tiem of lambda
 	MaxFinishTime int64 `json:"maxFinishTime"`
+
+	// SpanError error details
+	SpanError *SpanError `json:"error"`
 }

@@ -17,6 +17,7 @@ resource "aws_lambda_function" "otel" {
     variables = {
       LUMIGO_DEBUG = "true"
       LUMIGO_USE_TRACER_EXTENSION = "true"
+      RETURN_ERROR = "true"
     }
   }
 }
