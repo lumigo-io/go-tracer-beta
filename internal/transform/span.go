@@ -38,6 +38,8 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 		attrs[string(kv.Key)] = kv.Value.AsInterface()
 	}
 
+	logger.WithFields(attrs).Info("span attributes")
+
 	if span.SpanKind() != apitrace.SpanKindUnspecified {
 		attrs["span.kind"] = strings.ToLower(span.SpanKind().String())
 	}
@@ -128,13 +130,8 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 	}
 	lumigoSpan.LambdaType = lambdaType
 
-	envs := make(map[string]string)
-	for _, e := range os.Environ() {
-		pair := strings.SplitN(e, "=", 2)
-		envs[pair[0]] = pair[1]
-	}
-	envsString, _ := json.Marshal(envs)
-	lumigoSpan.LambdaEnvVars = string(envsString)
+	lumigoSpan.SpanError = getSpanError(attrs, logger)
+	lumigoSpan.LambdaEnvVars = getEnvVars(logger)
 	return lumigoSpan
 }
 
@@ -165,4 +162,43 @@ func getTransactionID(root string) string {
 		return items[2]
 	}
 	return ""
+}
+
+func getSpanError(attrs map[string]interface{}, logger logrus.FieldLogger) *telemetry.SpanError {
+	var spanError telemetry.SpanError
+
+	if errType, ok := attrs["error_type"]; ok {
+		spanError.Type = fmt.Sprint(errType)
+	} else {
+		logger.Error("unable to fetch lambda error type from span")
+	}
+
+	if errMessage, ok := attrs["error_message"]; ok {
+		spanError.Message = fmt.Sprint(errMessage)
+	} else {
+		logger.Error("unable to fetch lambda error message from span")
+	}
+
+	if errStacktrace, ok := attrs["error_stacktrace"]; ok {
+		spanError.Stacktrace = fmt.Sprint(errStacktrace)
+	} else {
+		logger.Error("unable to fetch lambda error stacktrace from span")
+	}
+	if spanError.IsEmpty() {
+		return nil
+	}
+	return &spanError
+}
+
+func getEnvVars(logger logrus.FieldLogger) string {
+	envs := make(map[string]string)
+	for _, e := range os.Environ() {
+		pair := strings.SplitN(e, "=", 2)
+		envs[pair[0]] = pair[1]
+	}
+	envsString, err := json.Marshal(envs)
+	if err != nil {
+		logger.Error("unable to fetch lambda environment vars")
+	}
+	return string(envsString)
 }

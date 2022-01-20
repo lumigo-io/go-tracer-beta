@@ -35,7 +35,7 @@ jobs:
     - checkout
     - run: |
         git log --oneline > changelog.md
-        gh release create v1.0 -F changelog.md
+        gh release create $CIRCLE_TAG -F changelog.md
 
 workflows:
   ci-build:
@@ -55,4 +55,6 @@ workflows:
     - create-push-release:
         filters:
           tags:
-            only: /^v.*/ 
+            only: /^v.*/
+          branches:
+            ignore: /.*/

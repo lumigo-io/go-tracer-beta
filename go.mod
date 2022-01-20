@@ -7,6 +7,8 @@ require (
 	github.com/aws/aws-sdk-go v1.42.23
 	github.com/aws/aws-sdk-go-v2 v1.11.1
 	github.com/aws/aws-sdk-go-v2/config v1.10.2
+	github.com/go-errors/errors v1.4.1
+	github.com/google/uuid v1.3.0
 	github.com/pkg/errors v0.9.1
 	github.com/segmentio/ksuid v1.0.4
 	github.com/sirupsen/logrus v1.8.1
@@ -38,7 +40,6 @@ require (
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/go-logr/logr v1.2.1 // indirect
 	github.com/go-logr/stdr v1.2.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mitchellh/mapstructure v1.4.2 // indirect
