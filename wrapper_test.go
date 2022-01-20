@@ -209,6 +209,14 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 				return struct{ Port int }{event}, nil
 			},
 		},
+		{
+			name:     "input: struct event, return error",
+			input:    9090,
+			expected: expected{"", errors.New("failed error")},
+			handler: func(event int) (*struct{ Port int }, error) {
+				return nil, errors.New("failed error")
+			},
+		},
 	}
 	testContext := lambdacontext.NewContext(mockContext, &mockLambdaContext)
 	for i, testCase := range testCases {
@@ -249,10 +257,19 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 			assert.Equal(w.T(), os.Getenv("AWS_REGION"), lumigoEnd.Region)
 			assert.Equal(w.T(), "bd862e3fe1be46a994272793", lumigoEnd.TransactionID)
 			assert.Equal(w.T(), string(inputPayload), lumigoEnd.Event)
-			assert.NotNil(w.T(), lumigoEnd.LambdaResponse)
-			fmt.Println(*lumigoEnd.LambdaResponse)
-			assert.Equal(w.T(), testCase.expected.val, *lumigoEnd.LambdaResponse)
 			assert.Equal(w.T(), version, lumigoStart.SpanInfo.TracerVersion.Version)
+
+			if testCase.expected.err != nil {
+				assert.NotNil(w.T(), lumigoEnd.SpanError)
+				assert.Equal(w.T(), testCase.expected.err.Error(), lumigoEnd.SpanError.Message)
+				assert.Equal(w.T(), reflect.TypeOf(testCase.expected.err).String(), lumigoEnd.SpanError.Type)
+
+				assert.Contains(t, lumigoEnd.SpanError.Stacktrace, "go-tracer.WrapHandler.func1")
+				assert.Contains(t, lumigoEnd.SpanError.Stacktrace, "go-tracer.(*wrapperTestSuite).TestLambdaHandlerE2ELocal.func5")
+			} else {
+				assert.NotNil(w.T(), lumigoEnd.LambdaResponse)
+				assert.Equal(w.T(), testCase.expected.val, *lumigoEnd.LambdaResponse)
+			}
 		})
 
 		assert.NoError(w.T(), deleteAllFiles())
