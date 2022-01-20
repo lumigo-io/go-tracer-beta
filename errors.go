@@ -12,17 +12,14 @@ import (
 var ErrInvalidToken = errors.New("invalid Token. Go to Lumigo Settings to get a valid token")
 
 // defaultStackLength specifies the default maximum size of a stack trace.
-const defaultStackLength = 32
+const defaultStackLength = 64
 
-func takeStacktrace(n, skip uint) string {
-	if n == 0 {
-		n = defaultStackLength
-	}
+func takeStacktrace() string {
 	var builder strings.Builder
-	pcs := make([]uintptr, n)
+	pcs := make([]uintptr, defaultStackLength)
 
 	// +2 to exclude runtime.Callers and takeStacktrace
-	numFrames := runtime.Callers(2+int(skip), pcs)
+	numFrames := runtime.Callers(2+int(0), pcs)
 	if numFrames == 0 {
 		return ""
 	}

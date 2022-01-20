@@ -104,7 +104,7 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 		if lambdaErr != nil {
 			span.SetAttributes(attribute.String("error_type", reflect.TypeOf(lambdaErr).String()))
 			span.SetAttributes(attribute.String("error_message", lambdaErr.Error()))
-			span.SetAttributes(attribute.String("error_stacktrace", takeStacktrace(64, 0)))
+			span.SetAttributes(attribute.String("error_stacktrace", takeStacktrace()))
 			return nil, lambdaErr
 		}
 		return json.RawMessage(response), lambdaErr
