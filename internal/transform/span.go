@@ -38,6 +38,8 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 		attrs[string(kv.Key)] = kv.Value.AsInterface()
 	}
 
+	logger.WithFields(attrs).Info("span attributes")
+
 	if span.SpanKind() != apitrace.SpanKindUnspecified {
 		attrs["span.kind"] = strings.ToLower(span.SpanKind().String())
 	}
