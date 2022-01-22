@@ -44,19 +44,27 @@ func init() {
 
 // WrapHandler wraps the lambda handler
 func WrapHandler(handler interface{}, conf *Config) interface{} {
-	if err := loadConfig(*conf); err != nil {
-		logger.WithError(err).Error("failed validation error")
-		return handler
-	}
-	if !cfg.debug {
-		logger.Out = io.Discard
-	}
+	return func(ctx context.Context, payload json.RawMessage) (retVal interface{}, lambdaErr error) {
+		defer func() {
+			if err := recover(); err != nil {
+				logger.WithFields(log.Fields{
+					"stacktrace": takeStacktrace(),
+					"error":      err,
+				}).Error("an exception occurred in lumigo's code")
 
-	return func(ctx context.Context, payload json.RawMessage) (interface{}, error) {
+				retVal, lambdaErr = lambda.NewHandler(handler).Invoke(ctx, payload)
+			}
+		}()
+		if err := loadConfig(*conf); err != nil {
+			logger.WithError(err).Error("failed validation error")
+			return lambda.NewHandler(handler).Invoke(ctx, payload)
+		}
+		if !cfg.debug {
+			logger.Out = io.Discard
+		}
 		ctx = lumigoctx.NewContext(ctx, &lumigoctx.LumigoContext{
 			TracerVersion: version,
 		})
-
 		exporter, err := createExporter(cfg.PrintStdout, ctx, logger)
 		if err != nil {
 			return lambda.NewHandler(handler).Invoke(ctx, payload)
@@ -107,7 +115,8 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 			span.SetAttributes(attribute.String("error_stacktrace", takeStacktrace()))
 			return nil, lambdaErr
 		}
-		return json.RawMessage(response), lambdaErr
+		retVal = json.RawMessage(response)
+		return retVal, lambdaErr
 	}
 }
 
@@ -148,6 +157,5 @@ func createExporter(printStdout bool, ctx context.Context, logger log.FieldLogge
 	} else if err != nil {
 		logger.WithError(err).Error()
 	}
-
 	return newExporter(ctx, logger)
 }

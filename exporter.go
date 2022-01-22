@@ -25,7 +25,7 @@ type Exporter struct {
 	stopped   bool
 }
 
-// New creates an Exporter with the passed options.
+// newExporter creates an Exporter with the passed options.
 func newExporter(ctx context.Context, logger logrus.FieldLogger) (*Exporter, error) {
 	return &Exporter{
 		logger:  logger,
