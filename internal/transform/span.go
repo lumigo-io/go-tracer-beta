@@ -21,6 +21,10 @@ import (
 	apitrace "go.opentelemetry.io/otel/trace"
 )
 
+func IsStartSpan(span sdktrace.ReadOnlySpan) bool {
+	return span.Name() == os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
+}
+
 func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLogger) telemetry.Span {
 	numAttrs := len(span.Attributes()) + span.Resource().Len() + 2
 
@@ -54,6 +58,9 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 		uuid, _ := uuid.NewUUID()
 		lumigoSpan.LambdaContainerID = uuid.String()
 		lumigoSpan.ID = lambdaCtx.AwsRequestID
+		if IsStartSpan(span) {
+			lumigoSpan.ID += "_started"
+		}
 
 		accountID, err := getAccountID(lambdaCtx)
 		if err != nil {
