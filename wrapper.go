@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"reflect"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -44,24 +43,14 @@ func init() {
 
 // WrapHandler wraps the lambda handler
 func WrapHandler(handler interface{}, conf *Config) interface{} {
-	return func(ctx context.Context, payload json.RawMessage) (retVal interface{}, lambdaErr error) {
-		defer func() {
-			if err := recover(); err != nil {
-				logger.WithFields(log.Fields{
-					"stacktrace": takeStacktrace(),
-					"error":      err,
-				}).Error("an exception occurred in lumigo's code")
-
-				retVal, lambdaErr = lambda.NewHandler(handler).Invoke(ctx, payload)
-			}
-		}()
-		if err := loadConfig(*conf); err != nil {
-			logger.WithError(err).Error("failed validation error")
-			return lambda.NewHandler(handler).Invoke(ctx, payload)
-		}
-		if !cfg.debug {
-			logger.Out = io.Discard
-		}
+	if err := loadConfig(*conf); err != nil {
+		logger.WithError(err).Error("failed validation error")
+		return handler
+	}
+	if !cfg.debug {
+		logger.Out = io.Discard
+	}
+	return func(ctx context.Context, payload json.RawMessage) (interface{}, error) {
 		ctx = lumigoctx.NewContext(ctx, &lumigoctx.LumigoContext{
 			TracerVersion: version,
 		})
@@ -69,11 +58,12 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 		if err != nil {
 			return lambda.NewHandler(handler).Invoke(ctx, payload)
 		}
-
-		data, eventErr := json.Marshal(&payload)
-		if eventErr != nil {
-			logger.WithError(err).Error("failed to track event")
+		data, err := json.Marshal(&payload)
+		if err != nil {
+			logger.WithError(err).Error("failed to parse event payload")
+			return lambda.NewHandler(handler).Invoke(ctx, payload)
 		}
+
 		var tracerProvider *trace.TracerProvider
 		if conf.tracerProvider == nil {
 			tracerProvider = trace.NewTracerProvider(
@@ -87,36 +77,14 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 		}
 		otel.SetTracerProvider(tracerProvider)
 
-		defer tracerProvider.ForceFlush(ctx)
-		traceCtx, span := tracerProvider.Tracer("lumigo").Start(ctx, "LumigoParentSpan")
-		defer span.End()
-
+		tracer := NewTracer(ctx, tracerProvider, logger)
+		tracer.Start(data)
 		response, lambdaErr := otellambda.WrapHandler(lambda.NewHandler(handler),
 			otellambda.WithTracerProvider(tracerProvider),
-			otellambda.WithFlusher(tracerProvider)).Invoke(traceCtx, payload)
+			otellambda.WithFlusher(tracerProvider)).Invoke(tracer.traceCtx, payload)
 
-		os.Setenv("IS_WARM_START", "true") // nolint
-
-		if eventErr == nil {
-			span.SetAttributes(attribute.String("event", string(data)))
-		} else {
-			logger.WithError(err).Error("failed to track event")
-		}
-
-		if data, err := json.Marshal(json.RawMessage(response)); err == nil && lambdaErr == nil {
-			span.SetAttributes(attribute.String("response", string(data)))
-		} else {
-			logger.WithError(err).Error("failed to track response")
-		}
-
-		if lambdaErr != nil {
-			span.SetAttributes(attribute.String("error_type", reflect.TypeOf(lambdaErr).String()))
-			span.SetAttributes(attribute.String("error_message", lambdaErr.Error()))
-			span.SetAttributes(attribute.String("error_stacktrace", takeStacktrace()))
-			return nil, lambdaErr
-		}
-		retVal = json.RawMessage(response)
-		return retVal, lambdaErr
+		tracer.End(response, lambdaErr)
+		return json.RawMessage(response), lambdaErr
 	}
 }
 

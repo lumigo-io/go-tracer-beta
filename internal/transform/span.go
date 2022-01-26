@@ -16,7 +16,6 @@ import (
 	"github.com/lumigo-io/go-tracer-beta/internal/telemetry"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"gorm.io/gorm/logger"
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	apitrace "go.opentelemetry.io/otel/trace"
@@ -64,8 +63,8 @@ func (m *mapper) Transform() telemetry.Span {
 		EndedTimestamp:   m.span.EndTime().UnixMilli(),
 	}
 
-	isStartSpan := telemetry.IsStartSpan(span)
-	lambdaCtx, lambdaOk := lambdacontext.FromContext(ctx)
+	isStartSpan := telemetry.IsStartSpan(m.span)
+	lambdaCtx, lambdaOk := lambdacontext.FromContext(m.ctx)
 	if lambdaOk {
 		uuid, _ := uuid.NewUUID()
 		lumigoSpan.LambdaContainerID = uuid.String()
@@ -102,7 +101,7 @@ func (m *mapper) Transform() telemetry.Span {
 	if returnValue, ok := attrs["response"]; ok {
 		lumigoSpan.LambdaResponse = aws.String(fmt.Sprint(returnValue))
 	} else if !isStartSpan {
-		logger.Error("unable to fetch lambda response from span")
+		m.logger.Error("unable to fetch lambda response from span")
 	}
 
 	lumigoSpan.Region = os.Getenv("AWS_REGION")
@@ -150,8 +149,8 @@ func (m *mapper) Transform() telemetry.Span {
 	}
 	lumigoSpan.LambdaType = lambdaType
 
-	lumigoSpan.SpanError = getSpanError(attrs, isStartSpan, logger)
-	lumigoSpan.LambdaEnvVars = getEnvVars(logger)
+	lumigoSpan.SpanError = m.getSpanError(attrs, isStartSpan)
+	lumigoSpan.LambdaEnvVars = m.getEnvVars()
 	return lumigoSpan
 }
 
@@ -184,7 +183,7 @@ func getTransactionID(root string) string {
 	return ""
 }
 
-func getSpanError(attrs map[string]interface{}, isStartSpan bool, logger logrus.FieldLogger) *telemetry.SpanError {
+func (m *mapper) getSpanError(attrs map[string]interface{}, isStartSpan bool) *telemetry.SpanError {
 	if isStartSpan {
 		return nil
 	}

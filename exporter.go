@@ -53,7 +53,8 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	e.encoderMu.Lock()
 	defer e.encoderMu.Unlock()
 	for _, span := range spans {
-		lumigoSpan := transform.Span(e.context, span, logger)
+		mapper := transform.NewMapper(e.context, span, logger)
+		lumigoSpan := mapper.Transform()
 		if telemetry.IsStartSpan(span) {
 			if err := writeSpan([]telemetry.Span{lumigoSpan}, true); err != nil {
 				return errors.Wrap(err, "failed to store startSpan")
