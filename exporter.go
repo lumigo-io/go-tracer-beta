@@ -54,7 +54,7 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	defer e.encoderMu.Unlock()
 	for _, span := range spans {
 		lumigoSpan := transform.Span(e.context, span, logger)
-		if span.Name() == os.Getenv("AWS_LAMBDA_FUNCTION_NAME") {
+		if telemetry.IsStartSpan(span) {
 			if err := writeSpan([]telemetry.Span{lumigoSpan}, true); err != nil {
 				return errors.Wrap(err, "failed to store startSpan")
 			}

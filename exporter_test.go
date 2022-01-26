@@ -120,7 +120,7 @@ func (e *exporterTestSuite) TestExportSpans() {
 	assert.NoError(e.T(), err)
 
 	lumigoStart := container.startSpan[0]
-	assert.Equal(e.T(), mockLambdaContext.AwsRequestID, lumigoStart.ID)
+	assert.Equal(e.T(), mockLambdaContext.AwsRequestID+"_started", lumigoStart.ID)
 	assert.Equal(e.T(), "account-id", lumigoStart.Account)
 
 	lumigoEnd := container.endSpan[0]
