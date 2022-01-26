@@ -9,7 +9,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	lumigoctx "github.com/lumigo-io/go-tracer/internal/context"
+	lumigoctx "github.com/lumigo-io/go-tracer-beta/internal/context"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	easy "github.com/t-tomalak/logrus-easy-formatter"
