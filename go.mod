@@ -1,4 +1,4 @@
-module github.com/lumigo-io/go-tracer
+module github.com/lumigo-io/go-tracer-beta
 
 go 1.17
 
@@ -7,7 +7,6 @@ require (
 	github.com/aws/aws-sdk-go v1.42.23
 	github.com/aws/aws-sdk-go-v2 v1.11.1
 	github.com/aws/aws-sdk-go-v2/config v1.10.2
-	github.com/go-errors/errors v1.4.1
 	github.com/google/uuid v1.3.0
 	github.com/pkg/errors v0.9.1
 	github.com/segmentio/ksuid v1.0.4
