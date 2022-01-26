@@ -1,5 +1,11 @@
 package telemetry
 
+import (
+	"os"
+
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+)
+
 // SpanTraceRoot the amazon X-Trace-ID
 type SpanTraceRoot struct {
 	Root string `json:"Root"`
@@ -99,4 +105,8 @@ type Span struct {
 
 	// SpanError error details
 	SpanError *SpanError `json:"error"`
+}
+
+func IsStartSpan(span sdktrace.ReadOnlySpan) bool {
+	return span.Name() == os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
 }

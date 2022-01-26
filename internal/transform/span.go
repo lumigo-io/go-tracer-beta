@@ -21,10 +21,6 @@ import (
 	apitrace "go.opentelemetry.io/otel/trace"
 )
 
-func IsStartSpan(span sdktrace.ReadOnlySpan) bool {
-	return span.Name() == os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
-}
-
 func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLogger) telemetry.Span {
 	numAttrs := len(span.Attributes()) + span.Resource().Len() + 2
 
@@ -53,13 +49,15 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 		EndedTimestamp:   span.EndTime().UnixMilli(),
 	}
 
+	isStartSpan := telemetry.IsStartSpan(span)
 	lambdaCtx, lambdaOk := lambdacontext.FromContext(ctx)
 	if lambdaOk {
 		uuid, _ := uuid.NewUUID()
 		lumigoSpan.LambdaContainerID = uuid.String()
 		lumigoSpan.ID = lambdaCtx.AwsRequestID
-		if IsStartSpan(span) {
-			lumigoSpan.ID += "_started"
+
+		if isStartSpan {
+			lumigoSpan.ID = fmt.Sprintf("%s_started", lumigoSpan.ID)
 		}
 
 		accountID, err := getAccountID(lambdaCtx)
@@ -88,7 +86,7 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 
 	if returnValue, ok := attrs["response"]; ok {
 		lumigoSpan.LambdaResponse = aws.String(fmt.Sprint(returnValue))
-	} else {
+	} else if !isStartSpan {
 		logger.Error("unable to fetch lambda response from span")
 	}
 
@@ -137,7 +135,7 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 	}
 	lumigoSpan.LambdaType = lambdaType
 
-	lumigoSpan.SpanError = getSpanError(attrs, logger)
+	lumigoSpan.SpanError = getSpanError(attrs, isStartSpan, logger)
 	lumigoSpan.LambdaEnvVars = getEnvVars(logger)
 	return lumigoSpan
 }
@@ -171,9 +169,11 @@ func getTransactionID(root string) string {
 	return ""
 }
 
-func getSpanError(attrs map[string]interface{}, logger logrus.FieldLogger) *telemetry.SpanError {
+func getSpanError(attrs map[string]interface{}, isStartSpan bool, logger logrus.FieldLogger) *telemetry.SpanError {
+	if isStartSpan {
+		return nil
+	}
 	var spanError telemetry.SpanError
-
 	if errType, ok := attrs["error_type"]; ok {
 		spanError.Type = fmt.Sprint(errType)
 	} else {
