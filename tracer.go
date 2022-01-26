@@ -20,14 +20,7 @@ type tracer struct {
 }
 
 func init() {
-	defer func() {
-		if err := recover(); err != nil {
-			logger.WithFields(logrus.Fields{
-				"stacktrace": takeStacktrace(),
-				"error":      err,
-			}).Error("an exception occurred in lumigo's code")
-		}
-	}()
+	recoverWithLogs()
 }
 
 func NewTracer(ctx context.Context, provider *sdktrace.TracerProvider, logger logrus.FieldLogger) *tracer {
@@ -46,7 +39,7 @@ func (t *tracer) Start(data []byte) {
 	t.span.SetAttributes(attribute.String("event", string(data)))
 }
 
-// Start tracks the span end data after lambda execution
+// End tracks the span end data after lambda execution
 func (t *tracer) End(response []byte, lambdaErr error) {
 	if data, err := json.Marshal(json.RawMessage(response)); err == nil && lambdaErr == nil {
 		t.span.SetAttributes(attribute.String("response", string(data)))

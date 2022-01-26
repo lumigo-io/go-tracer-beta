@@ -42,6 +42,8 @@ func init() {
 	viper.SetEnvPrefix("lumigo")
 	viper.SetDefault("Enabled", true)
 	viper.SetDefault("Debug", false)
+
+	recoverWithLogs()
 }
 
 func loadConfig(conf Config) error {
