@@ -14,7 +14,6 @@ import (
 	easy "github.com/t-tomalak/logrus-easy-formatter"
 	lambdadetector "go.opentelemetry.io/contrib/detectors/aws/lambda"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-lambda-go/otellambda"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -38,7 +37,6 @@ func init() {
 		TimestampFormat: "2006-01-02 15:04:05",
 		LogFormat:       "#LUMIGO# - %time% - %lvl% - %msg%",
 	}
-	recoverWithLogs()
 }
 
 // WrapHandler wraps the lambda handler
@@ -54,36 +52,20 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 		ctx = lumigoctx.NewContext(ctx, &lumigoctx.LumigoContext{
 			TracerVersion: version,
 		})
-		exporter, err := createExporter(cfg.PrintStdout, ctx, logger)
-		if err != nil {
-			return lambda.NewHandler(handler).Invoke(ctx, payload)
+		tracer, err := NewTracer(ctx, cfg, payload)
+		// catch all errors and exceptions
+		if tracer == nil || err != nil {
+			response, err := lambda.NewHandler(handler).Invoke(ctx, payload)
+			return json.RawMessage(response), err
 		}
-		data, err := json.Marshal(&payload)
-		if err != nil {
-			logger.WithError(err).Error("failed to parse event payload")
-			return lambda.NewHandler(handler).Invoke(ctx, payload)
-		}
+		tracer.Start()
 
-		var tracerProvider *trace.TracerProvider
-		if conf.tracerProvider == nil {
-			tracerProvider = trace.NewTracerProvider(
-				trace.WithSyncer(exporter),
-				trace.WithResource(newResource(ctx,
-					attribute.String("event", string(data)),
-				)),
-			)
-		} else {
-			tracerProvider = conf.tracerProvider
-		}
-		otel.SetTracerProvider(tracerProvider)
-
-		tracer := NewTracer(ctx, tracerProvider, logger)
-		tracer.Start(data)
 		response, lambdaErr := otellambda.WrapHandler(lambda.NewHandler(handler),
-			otellambda.WithTracerProvider(tracerProvider),
-			otellambda.WithFlusher(tracerProvider)).Invoke(tracer.traceCtx, payload)
+			otellambda.WithTracerProvider(tracer.provider),
+			otellambda.WithFlusher(tracer.provider)).Invoke(tracer.traceCtx, payload)
 
 		tracer.End(response, lambdaErr)
+
 		return json.RawMessage(response), lambdaErr
 	}
 }

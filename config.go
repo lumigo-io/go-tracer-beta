@@ -2,7 +2,6 @@ package lumigotracer
 
 import (
 	"github.com/spf13/viper"
-	"go.opentelemetry.io/otel/sdk/trace"
 )
 
 // Config describes the struct about the configuration
@@ -16,9 +15,6 @@ type Config struct {
 
 	// debug log everything
 	debug bool
-
-	// tracerProvider to use a dynamic tracer provider for private usage only
-	tracerProvider *trace.TracerProvider
 
 	// PrintStdout prints in stdout
 	PrintStdout bool
@@ -42,11 +38,11 @@ func init() {
 	viper.SetEnvPrefix("lumigo")
 	viper.SetDefault("Enabled", true)
 	viper.SetDefault("Debug", false)
-
-	recoverWithLogs()
 }
 
 func loadConfig(conf Config) error {
+	defer recoverWithLogs()
+
 	cfg.Token = viper.GetString("Token")
 	if cfg.Token == "" {
 		cfg.Token = conf.Token

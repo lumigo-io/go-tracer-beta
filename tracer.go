@@ -6,41 +6,67 @@ import (
 	"os"
 	"reflect"
 
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )
 
 type tracer struct {
-	provider *sdktrace.TracerProvider
-	logger   logrus.FieldLogger
-	span     trace.Span
-	traceCtx context.Context
+	provider  *sdktrace.TracerProvider
+	logger    logrus.FieldLogger
+	span      trace.Span
+	eventData []byte
+	ctx       context.Context
+	traceCtx  context.Context
 }
 
-func init() {
-	recoverWithLogs()
-}
-
-func NewTracer(ctx context.Context, provider *sdktrace.TracerProvider, logger logrus.FieldLogger) *tracer {
-	traceCtx, span := provider.Tracer("lumigo").Start(ctx, "LumigoParentSpan")
-	return &tracer{
-		span:     span,
-		traceCtx: traceCtx,
-		provider: provider,
-		logger:   logger,
+func NewTracer(ctx context.Context, cfg Config, payload json.RawMessage) (retTracer *tracer, err error) {
+	defer recoverWithLogs()
+	retTracer = &tracer{
+		ctx:    ctx,
+		logger: logger,
 	}
+
+	exporter, err := createExporter(cfg.PrintStdout, ctx, logger)
+	if err != nil {
+		return nil, errors.Wrap(err, "faialed to create otel exporter")
+	}
+
+	data, err := json.Marshal(&payload)
+	if err != nil {
+		return nil, errors.Wrap(err, "faialed to parse event payload")
+	}
+	retTracer.eventData = data
+
+	tracerProvider := sdktrace.NewTracerProvider(
+		sdktrace.WithSyncer(exporter),
+		sdktrace.WithResource(newResource(ctx,
+			attribute.String("event", string(retTracer.eventData)),
+		)),
+	)
+	retTracer.provider = tracerProvider
+	otel.SetTracerProvider(tracerProvider)
+	panic("skata")
+	return retTracer, nil
 }
 
 // Start tracks the span start data
-func (t *tracer) Start(data []byte) {
+func (t *tracer) Start() {
+	defer recoverWithLogs()
 	os.Setenv("IS_WARM_START", "true") // nolint
-	t.span.SetAttributes(attribute.String("event", string(data)))
+
+	traceCtx, span := t.provider.Tracer("lumigo").Start(t.ctx, "LumigoParentSpan")
+	span.SetAttributes(attribute.String("event", string(t.eventData)))
+	t.span = span
+	t.traceCtx = traceCtx
 }
 
 // End tracks the span end data after lambda execution
 func (t *tracer) End(response []byte, lambdaErr error) {
+	defer recoverWithLogs()
 	if data, err := json.Marshal(json.RawMessage(response)); err == nil && lambdaErr == nil {
 		t.span.SetAttributes(attribute.String("response", string(data)))
 	} else {

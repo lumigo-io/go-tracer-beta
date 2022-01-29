@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"reflect"
 	"testing"
@@ -14,7 +13,6 @@ import (
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 var (
@@ -44,7 +42,6 @@ func TestSetupWrapperSuite(t *testing.T) {
 }
 
 func (w *wrapperTestSuite) SetupTest() {
-	logger.Out = io.Discard
 	_ = os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "testFunction")
 	_ = os.Setenv("AWS_REGION", "us-east-1")
 	_ = os.Setenv("AWS_LAMBDA_FUNCTION_VERSION", "$LATEST")
@@ -162,10 +159,7 @@ func (w *wrapperTestSuite) TestLambdaHandlerSignatures() {
 		w.T().Run(fmt.Sprintf("handlerTestCase[%d] %s", i, testCase.name), func(t *testing.T) {
 			inputPayload, _ := json.Marshal(testCase.input)
 
-			tp, err := getTestProvider(mockContext)
-			assert.Nil(t, err)
-
-			lambdaHandler := WrapHandler(testCase.handler, &Config{Token: "token", tracerProvider: tp})
+			lambdaHandler := WrapHandler(testCase.handler, &Config{Token: "token"})
 
 			handler := reflect.ValueOf(lambdaHandler)
 			handlerType := handler.Type()
@@ -223,7 +217,7 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 		w.T().Run(fmt.Sprintf("handlerTestCase[%d] %s", i, testCase.name), func(t *testing.T) {
 
 			inputPayload, _ := json.Marshal(testCase.input)
-			lambdaHandler := WrapHandler(testCase.handler, &Config{Token: "token"})
+			lambdaHandler := WrapHandler(testCase.handler, &Config{Token: "token", debug: true})
 
 			handler := reflect.ValueOf(lambdaHandler)
 			_ = handler.Call([]reflect.Value{reflect.ValueOf(testContext), reflect.ValueOf(inputPayload)})
@@ -274,17 +268,4 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 
 		assert.NoError(w.T(), deleteAllFiles())
 	}
-}
-
-// setTestProvider creates a provider
-func getTestProvider(ctx context.Context) (*sdktrace.TracerProvider, error) {
-	exporter, err := createExporter(cfg.PrintStdout, context.Background(), logger)
-	if err != nil {
-		return nil, err
-	}
-	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSpanProcessor(sdktrace.NewSimpleSpanProcessor(exporter)), //needed for synchronous writing and testing
-		sdktrace.WithResource(newResource(ctx)),
-	)
-	return tracerProvider, nil
 }

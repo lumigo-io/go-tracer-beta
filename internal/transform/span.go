@@ -149,7 +149,9 @@ func (m *mapper) Transform() telemetry.Span {
 	}
 	lumigoSpan.LambdaType = lambdaType
 
-	lumigoSpan.SpanError = m.getSpanError(attrs, isStartSpan)
+	if !isStartSpan {
+		lumigoSpan.SpanError = m.getSpanError(attrs)
+	}
 	lumigoSpan.LambdaEnvVars = m.getEnvVars()
 	return lumigoSpan
 }
@@ -183,10 +185,7 @@ func getTransactionID(root string) string {
 	return ""
 }
 
-func (m *mapper) getSpanError(attrs map[string]interface{}, isStartSpan bool) *telemetry.SpanError {
-	if isStartSpan {
-		return nil
-	}
+func (m *mapper) getSpanError(attrs map[string]interface{}) *telemetry.SpanError {
 	var spanError telemetry.SpanError
 	if errType, ok := attrs["error_type"]; ok {
 		spanError.Type = fmt.Sprint(errType)

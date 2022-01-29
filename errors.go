@@ -16,14 +16,12 @@ var ErrInvalidToken = errors.New("invalid Token. Go to Lumigo Settings to get a 
 const defaultStackLength = 64
 
 func recoverWithLogs() {
-	defer func() {
-		if err := recover(); err != nil {
-			logger.WithFields(logrus.Fields{
-				"stacktrace": takeStacktrace(),
-				"error":      err,
-			}).Error("an exception occurred in lumigo's code")
-		}
-	}()
+	if err := recover(); err != nil {
+		logger.WithFields(logrus.Fields{
+			"stacktrace": takeStacktrace(),
+			"error":      err,
+		}).Error("an exception occurred in lumigo's code")
+	}
 }
 
 func takeStacktrace() string {
