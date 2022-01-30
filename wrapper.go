@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"reflect"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -15,7 +14,6 @@ import (
 	easy "github.com/t-tomalak/logrus-easy-formatter"
 	lambdadetector "go.opentelemetry.io/contrib/detectors/aws/lambda"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-lambda-go/otellambda"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -39,7 +37,6 @@ func init() {
 		TimestampFormat: "2006-01-02 15:04:05",
 		LogFormat:       "#LUMIGO# - %time% - %lvl% - %msg%",
 	}
-
 }
 
 // WrapHandler wraps the lambda handler
@@ -51,62 +48,24 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 	if !cfg.debug {
 		logger.Out = io.Discard
 	}
-
 	return func(ctx context.Context, payload json.RawMessage) (interface{}, error) {
 		ctx = lumigoctx.NewContext(ctx, &lumigoctx.LumigoContext{
 			TracerVersion: version,
 		})
-
-		exporter, err := createExporter(cfg.PrintStdout, ctx, logger)
-		if err != nil {
-			return lambda.NewHandler(handler).Invoke(ctx, payload)
+		tracer, err := NewTracer(ctx, cfg, payload)
+		// catch all errors and exceptions
+		if tracer == nil || err != nil {
+			response, err := lambda.NewHandler(handler).Invoke(ctx, payload)
+			return json.RawMessage(response), err
 		}
-
-		data, eventErr := json.Marshal(&payload)
-		if eventErr != nil {
-			logger.WithError(err).Error("failed to track event")
-		}
-		var tracerProvider *trace.TracerProvider
-		if conf.tracerProvider == nil {
-			tracerProvider = trace.NewTracerProvider(
-				trace.WithSyncer(exporter),
-				trace.WithResource(newResource(ctx,
-					attribute.String("event", string(data)),
-				)),
-			)
-		} else {
-			tracerProvider = conf.tracerProvider
-		}
-		otel.SetTracerProvider(tracerProvider)
-
-		defer tracerProvider.ForceFlush(ctx)
-		traceCtx, span := tracerProvider.Tracer("lumigo").Start(ctx, "LumigoParentSpan")
-		defer span.End()
+		tracer.Start()
 
 		response, lambdaErr := otellambda.WrapHandler(lambda.NewHandler(handler),
-			otellambda.WithTracerProvider(tracerProvider),
-			otellambda.WithFlusher(tracerProvider)).Invoke(traceCtx, payload)
+			otellambda.WithTracerProvider(tracer.provider),
+			otellambda.WithFlusher(tracer.provider)).Invoke(tracer.traceCtx, payload)
 
-		os.Setenv("IS_WARM_START", "true") // nolint
+		tracer.End(response, lambdaErr)
 
-		if eventErr == nil {
-			span.SetAttributes(attribute.String("event", string(data)))
-		} else {
-			logger.WithError(err).Error("failed to track event")
-		}
-
-		if data, err := json.Marshal(json.RawMessage(response)); err == nil && lambdaErr == nil {
-			span.SetAttributes(attribute.String("response", string(data)))
-		} else {
-			logger.WithError(err).Error("failed to track response")
-		}
-
-		if lambdaErr != nil {
-			span.SetAttributes(attribute.String("error_type", reflect.TypeOf(lambdaErr).String()))
-			span.SetAttributes(attribute.String("error_message", lambdaErr.Error()))
-			span.SetAttributes(attribute.String("error_stacktrace", takeStacktrace()))
-			return nil, lambdaErr
-		}
 		return json.RawMessage(response), lambdaErr
 	}
 }
@@ -148,6 +107,5 @@ func createExporter(printStdout bool, ctx context.Context, logger log.FieldLogge
 	} else if err != nil {
 		logger.WithError(err).Error()
 	}
-
 	return newExporter(ctx, logger)
 }

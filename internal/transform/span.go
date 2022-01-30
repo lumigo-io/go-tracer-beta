@@ -21,36 +21,50 @@ import (
 	apitrace "go.opentelemetry.io/otel/trace"
 )
 
-func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLogger) telemetry.Span {
-	numAttrs := len(span.Attributes()) + span.Resource().Len() + 2
+type mapper struct {
+	ctx    context.Context
+	span   sdktrace.ReadOnlySpan
+	logger logrus.FieldLogger
+}
 
-	if span.SpanKind() != apitrace.SpanKindUnspecified {
+func NewMapper(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLogger) *mapper {
+	return &mapper{
+		ctx:    ctx,
+		span:   span,
+		logger: logger,
+	}
+}
+
+func (m *mapper) Transform() telemetry.Span {
+	numAttrs := len(m.span.Attributes()) + m.span.Resource().Len() + 2
+
+	if m.span.SpanKind() != apitrace.SpanKindUnspecified {
 		numAttrs++
 	}
 
 	attrs := make(map[string]interface{}, numAttrs)
 
-	for iter := span.Resource().Iter(); iter.Next(); {
+	for iter := m.span.Resource().Iter(); iter.Next(); {
 		kv := iter.Label()
 		attrs[string(kv.Key)] = kv.Value.AsInterface()
 	}
-	for _, kv := range span.Attributes() {
+	for _, kv := range m.span.Attributes() {
 		attrs[string(kv.Key)] = kv.Value.AsInterface()
 	}
 
-	logger.WithFields(attrs).Info("span attributes")
+	m.logger.WithFields(attrs).Info("span attributes")
 
-	if span.SpanKind() != apitrace.SpanKindUnspecified {
-		attrs["span.kind"] = strings.ToLower(span.SpanKind().String())
+	if m.span.SpanKind() != apitrace.SpanKindUnspecified {
+		attrs["m.span.kind"] = strings.ToLower(m.span.SpanKind().String())
 	}
 
 	lumigoSpan := telemetry.Span{
-		StartedTimestamp: span.StartTime().UnixMilli(),
-		EndedTimestamp:   span.EndTime().UnixMilli(),
+		StartedTimestamp: m.span.StartTime().UnixMilli(),
+		EndedTimestamp:   m.span.EndTime().UnixMilli(),
 	}
 
-	isStartSpan := telemetry.IsStartSpan(span)
-	lambdaCtx, lambdaOk := lambdacontext.FromContext(ctx)
+	isStartSpan := telemetry.IsStartSpan(m.span)
+	lambdaCtx, lambdaOk := lambdacontext.FromContext(m.ctx)
 	if lambdaOk {
 		uuid, _ := uuid.NewUUID()
 		lumigoSpan.LambdaContainerID = uuid.String()
@@ -62,32 +76,32 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 
 		accountID, err := getAccountID(lambdaCtx)
 		if err != nil {
-			logger.WithError(err).Error()
+			m.logger.WithError(err).Error()
 		}
 		lumigoSpan.Account = accountID
 
-		deadline, _ := ctx.Deadline()
+		deadline, _ := m.ctx.Deadline()
 		lumigoSpan.MaxFinishTime = time.Now().UnixMilli() - deadline.UnixMilli()
 	} else {
-		logger.Error("unable to fetch from LambdaContext")
+		m.logger.Error("unable to fetch from LambdaContext")
 	}
 
 	if token, ok := attrs["lumigo_token"]; ok {
 		lumigoSpan.Token = fmt.Sprint(token)
 	} else {
-		logger.Error("unable to fetch lumigo token from span")
+		m.logger.Error("unable to fetch lumigo token from span")
 	}
 
 	if event, ok := attrs["event"]; ok {
 		lumigoSpan.Event = fmt.Sprint(event)
 	} else {
-		logger.Error("unable to fetch lambda event from span")
+		m.logger.Error("unable to fetch lambda event from span")
 	}
 
 	if returnValue, ok := attrs["response"]; ok {
 		lumigoSpan.LambdaResponse = aws.String(fmt.Sprint(returnValue))
 	} else if !isStartSpan {
-		logger.Error("unable to fetch lambda response from span")
+		m.logger.Error("unable to fetch lambda response from span")
 	}
 
 	lumigoSpan.Region = os.Getenv("AWS_REGION")
@@ -97,7 +111,7 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 
 	awsRoot := getAmazonTraceID()
 	if awsRoot == "" {
-		logger.Error("unable to fetch Amazon Trace ID")
+		m.logger.Error("unable to fetch Amazon Trace ID")
 	}
 	lumigoSpan.SpanInfo = telemetry.SpanInfo{
 		LogStreamName: os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME"),
@@ -110,16 +124,16 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 	if transactionID := getTransactionID(awsRoot); transactionID != "" {
 		lumigoSpan.TransactionID = transactionID
 	} else {
-		logger.Error("unable to fetch transaction ID")
+		m.logger.Error("unable to fetch transaction ID")
 	}
 
-	lumigoCtx, lumigoOk := lumigoctx.FromContext(ctx)
+	lumigoCtx, lumigoOk := lumigoctx.FromContext(m.ctx)
 	if lumigoOk {
 		lumigoSpan.SpanInfo.TracerVersion = telemetry.TracerVersion{
 			Version: lumigoCtx.TracerVersion,
 		}
 	} else {
-		logger.Error("unable to fetch from LumigoContext")
+		m.logger.Error("unable to fetch from LumigoContext")
 	}
 
 	isWarmStart := os.Getenv("IS_WARM_START")
@@ -130,13 +144,15 @@ func Span(ctx context.Context, span sdktrace.ReadOnlySpan, logger logrus.FieldLo
 	}
 
 	lambdaType := "function"
-	if span.Name() != lumigoSpan.LambdaName && span.Name() != "LumigoParentSpan" {
+	if m.span.Name() != lumigoSpan.LambdaName && m.span.Name() != "LumigoParentSpan" {
 		lambdaType = "http"
 	}
 	lumigoSpan.LambdaType = lambdaType
 
-	lumigoSpan.SpanError = getSpanError(attrs, isStartSpan, logger)
-	lumigoSpan.LambdaEnvVars = getEnvVars(logger)
+	if !isStartSpan {
+		lumigoSpan.SpanError = m.getSpanError(attrs)
+	}
+	lumigoSpan.LambdaEnvVars = m.getEnvVars()
 	return lumigoSpan
 }
 
@@ -169,27 +185,24 @@ func getTransactionID(root string) string {
 	return ""
 }
 
-func getSpanError(attrs map[string]interface{}, isStartSpan bool, logger logrus.FieldLogger) *telemetry.SpanError {
-	if isStartSpan {
-		return nil
-	}
+func (m *mapper) getSpanError(attrs map[string]interface{}) *telemetry.SpanError {
 	var spanError telemetry.SpanError
 	if errType, ok := attrs["error_type"]; ok {
 		spanError.Type = fmt.Sprint(errType)
 	} else {
-		logger.Error("unable to fetch lambda error type from span")
+		m.logger.Error("unable to fetch lambda error type from span")
 	}
 
 	if errMessage, ok := attrs["error_message"]; ok {
 		spanError.Message = fmt.Sprint(errMessage)
 	} else {
-		logger.Error("unable to fetch lambda error message from span")
+		m.logger.Error("unable to fetch lambda error message from span")
 	}
 
 	if errStacktrace, ok := attrs["error_stacktrace"]; ok {
 		spanError.Stacktrace = fmt.Sprint(errStacktrace)
 	} else {
-		logger.Error("unable to fetch lambda error stacktrace from span")
+		m.logger.Error("unable to fetch lambda error stacktrace from span")
 	}
 	if spanError.IsEmpty() {
 		return nil
@@ -197,7 +210,7 @@ func getSpanError(attrs map[string]interface{}, isStartSpan bool, logger logrus.
 	return &spanError
 }
 
-func getEnvVars(logger logrus.FieldLogger) string {
+func (m *mapper) getEnvVars() string {
 	envs := make(map[string]string)
 	for _, e := range os.Environ() {
 		pair := strings.SplitN(e, "=", 2)
@@ -205,7 +218,7 @@ func getEnvVars(logger logrus.FieldLogger) string {
 	}
 	envsString, err := json.Marshal(envs)
 	if err != nil {
-		logger.Error("unable to fetch lambda environment vars")
+		m.logger.Error("unable to fetch lambda environment vars")
 	}
 	return string(envsString)
 }

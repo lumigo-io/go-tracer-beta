@@ -318,7 +318,8 @@ func TestTransform(t *testing.T) {
 
 	for _, tc := range testcases {
 		tc.before()
-		lumigoSpan := Span(ctx, tc.input.Snapshot(), logrus.New())
+		mapper := NewMapper(ctx, tc.input.Snapshot(), logrus.New())
+		lumigoSpan := mapper.Transform()
 		// intentionally ignore CI and Local envs
 		lumigoSpan.LambdaEnvVars = ""
 		// intentionally ignore generated LambdaContainerID
