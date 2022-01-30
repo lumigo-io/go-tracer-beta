@@ -284,6 +284,7 @@ func TestTransform(t *testing.T) {
 				Name:      "LumigoParentSpan",
 				Attributes: []attribute.KeyValue{
 					attribute.String("event", "test"),
+					attribute.Bool("has_error", true),
 					attribute.String("error_type", "TestError"),
 					attribute.String("error_message", "failed error"),
 					attribute.String("error_stacktrace", "failed error"),

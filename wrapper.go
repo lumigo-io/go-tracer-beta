@@ -35,7 +35,7 @@ func init() {
 	logger.Out = os.Stdout
 	logger.Formatter = &easy.Formatter{
 		TimestampFormat: "2006-01-02 15:04:05",
-		LogFormat:       "#LUMIGO# - %time% - %lvl% - %msg%",
+		LogFormat:       "#LUMIGO# - %time% - %lvl% - %msg%\n",
 	}
 }
 

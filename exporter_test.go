@@ -156,7 +156,6 @@ func readSpansFromFile() (spanContainer, error) {
 		if err != nil {
 			return spanContainer{}, err
 		}
-		fmt.Println(file.Name())
 		if strings.Contains(file.Name(), "_span") {
 			container.startSpan = spans
 			continue
