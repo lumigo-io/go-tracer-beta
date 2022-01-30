@@ -68,7 +68,7 @@ govet:
 lint:
 	@echo Running lint
 	@if ! [ -x "$$(command -v ./bin/golangci-lint)" ]; then \
-		echo "\n\ngolangci-lint is not installed. Please use setup with make or see https://github.com/golangci/golangci-lint#install."; \
+		echo "\n\ngolangci-lint is not installed. Please use `make setup` first or see https://github.com/golangci/golangci-lint#install."; \
 		exit 1; \
 	fi; \
 	${GOLANGCILINT_BIN} run -E gofmt --timeout 5m
