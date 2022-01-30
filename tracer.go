@@ -32,12 +32,12 @@ func NewTracer(ctx context.Context, cfg Config, payload json.RawMessage) (retTra
 
 	exporter, err := createExporter(cfg.PrintStdout, ctx, logger)
 	if err != nil {
-		return nil, errors.Wrap(err, "faialed to create otel exporter")
+		return nil, errors.Wrap(err, "failed to create otel exporter")
 	}
 
 	data, err := json.Marshal(&payload)
 	if err != nil {
-		return nil, errors.Wrap(err, "faialed to parse event payload")
+		return nil, errors.Wrap(err, "failed to parse event payload")
 	}
 	retTracer.eventData = data
 
@@ -49,7 +49,6 @@ func NewTracer(ctx context.Context, cfg Config, payload json.RawMessage) (retTra
 	)
 	retTracer.provider = tracerProvider
 	otel.SetTracerProvider(tracerProvider)
-	panic("skata")
 	return retTracer, nil
 }
 
