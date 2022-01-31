@@ -25,7 +25,7 @@ $ go get github.com/lumigo-io/go-tracer-beta@master
 
 ## Usage
 
-You need a lumigo token which you can find under the `Project Settings` and `Tracing` tab in lumigo portal. Then you need just to wrap your Lambda:
+You need a lumigo token which you can find under the `Project Settings` and `Tracing` tab in lumigo platform. Then you need just to wrap your Lambda:
 
 ```go
 type MyEvent struct {
