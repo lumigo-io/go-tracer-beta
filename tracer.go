@@ -73,6 +73,7 @@ func (t *tracer) End(response []byte, lambdaErr error) {
 	}
 
 	if lambdaErr != nil {
+		t.span.SetAttributes(attribute.Bool("has_error", true))
 		t.span.SetAttributes(attribute.String("error_type", reflect.TypeOf(lambdaErr).String()))
 		t.span.SetAttributes(attribute.String("error_message", lambdaErr.Error()))
 		t.span.SetAttributes(attribute.String("error_stacktrace", takeStacktrace()))

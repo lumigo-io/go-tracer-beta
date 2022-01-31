@@ -186,6 +186,9 @@ func getTransactionID(root string) string {
 }
 
 func (m *mapper) getSpanError(attrs map[string]interface{}) *telemetry.SpanError {
+	if _, ok := attrs["has_error"]; !ok {
+		return nil
+	}
 	var spanError telemetry.SpanError
 	if errType, ok := attrs["error_type"]; ok {
 		spanError.Type = fmt.Sprint(errType)
