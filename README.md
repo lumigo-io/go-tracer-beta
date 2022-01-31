@@ -23,11 +23,26 @@ version number as well:
 $ go get github.com/lumigo-io/go-tracer-beta@master
 ```
 
+## Configuration
+Lumigo Go tracer offers several different configuration options. Pass these to the Lambda function as environment variables:
+
+
+| Name                         | Type      | Description                 | Required          |
+|------------------------------|-----------|-----------------------------|-------------------|
+| LUMIGO_USE_TRACER_EXTENSION  | bool      | Enables usage of Go tracer  | true              |
+| LUMIGO_DEBUG                 | bool      | Enables debug logging       | false             |
+
 ## Usage
 
 You need a lumigo token which you can find under the `Project Settings` and `Tracing` tab in lumigo platform. Then you need just to wrap your Lambda:
 
 ```go
+import (
+  //other imports
+
+  lumigotracer "github.com/lumigo-io/go-tracer-beta"
+)
+
 type MyEvent struct {
   Name string `json:"name"`
 }
