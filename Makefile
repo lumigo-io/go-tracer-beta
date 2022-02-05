@@ -73,6 +73,12 @@ lint:
 	fi; \
 	${GOLANGCILINT_BIN} run -E gofmt --timeout 5m
 
+.PHONY:
+## release: creates a new tag and publishes a new Github release
+release:
+	@echo Releasing a new version
+	./scripts/release.sh
+
 .PHONY: setup
 ## setup: installs golangci-lint
 setup:
