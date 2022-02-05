@@ -59,6 +59,8 @@ func main() {
 }
 ```
 
+In your lambda environment variables you need to set `LUMIGO_USE_TRACER_EXTENSION: true` and use the following layer for `us-east-1`: `arn:aws:lambda:us-east-1:114300393969:layer:lumigo-tracer-extension:36`. The layer will be available in more regions soon.
+
 ## Contributing
 Contributions to this project are welcome from all! Below are a couple pointers on how to prepare your machine, as well as some information on testing.
 
