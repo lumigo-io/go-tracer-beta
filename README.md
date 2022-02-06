@@ -1,5 +1,7 @@
 # go-tracer
 
+[![codecov](https://codecov.io/gh/lumigo-io/go-tracer-beta/branch/master/graph/badge.svg?token=x49mnWnhaz)](https://codecov.io/gh/lumigo-io/go-tracer-beta)
+
 ## Required Tools:
 - go v1.16 and later
 - make
