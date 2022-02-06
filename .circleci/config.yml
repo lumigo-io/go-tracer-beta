@@ -25,8 +25,7 @@ jobs:
     - checkout
     - *restore_cache
     - run: make checks
-    - name: Upload coverage to Codecov
-      run: bash <(curl -s https://codecov.io/bash)
+    - run: bash <(curl -s https://codecov.io/bash)
     - *save_cache
   
   create-push-release:
