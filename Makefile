@@ -77,7 +77,7 @@ lint:
 ## release: creates a new tag and publishes a new Github release
 release:
 	@echo Releasing a new version
-	./scripts/release.sh
+	./scripts/bd_to_prod.sh
 
 .PHONY: setup
 ## setup: installs golangci-lint
