@@ -55,6 +55,8 @@ func NewTracer(ctx context.Context, cfg Config, payload json.RawMessage) (retTra
 // Start tracks the span start data
 func (t *tracer) Start() {
 	defer recoverWithLogs()
+
+	t.logger.Info("tracer starting")
 	os.Setenv("IS_WARM_START", "true") // nolint
 
 	traceCtx, span := t.provider.Tracer("lumigo").Start(t.ctx, "LumigoParentSpan")
@@ -80,4 +82,6 @@ func (t *tracer) End(response []byte, lambdaErr error) {
 	}
 	t.provider.ForceFlush(t.traceCtx)
 	t.span.End()
+
+	t.logger.Info("tracer ending")
 }
