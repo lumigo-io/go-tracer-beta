@@ -108,3 +108,28 @@ After you finished testing just destroy the AWS infrastructure resources for Lam
 export AWS_PROFILE=<your-profile>
 make destroy-example
 ```
+
+### Releases
+
+Everytime we merge in master we push a new release version. Based on the semantic versioning
+we use the follow format:
+
+#### Patch Release
+
+Example commit message:
+
+`patch: fix a buf for spans`
+
+#### Minor Release
+
+Example commit message:
+
+`minor: add a feature for tracking http`
+
+#### Major Release
+
+Example commit message:
+
+`major: upgrade telemetry sdk`
+
+After merging, a new tag will be pushed on the previous available version. IN parallel a Github Release will be pushed automatically. 
