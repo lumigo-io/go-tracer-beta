@@ -41,6 +41,12 @@ destroy-example: build-example
 	cd _example/terraform && \
 	terraform destroy --auto-approve
 
+.PHONY: dist-example
+## dist-example
+dist-example: clean build-example
+	@echo Creating a zip for lambda example
+	cd _example/terraform/bin; zip -q -9 lambda.zip otel
+
 .PHONY: checks
 ## checks: Run check-style and test
 checks: setup check-style test
@@ -55,6 +61,7 @@ check-style: govet lint
 clean:
 	rm -rf build/_output/bin/
 	rm -rf bin
+	rm -rf dist
 
 .PHONY: vet
 ## govet: Runs govet against all packages.
