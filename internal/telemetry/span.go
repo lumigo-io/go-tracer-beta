@@ -23,6 +23,23 @@ type SpanInfo struct {
 	LogGroupName  string        `json:"logGroupName"`
 	TraceID       SpanTraceRoot `json:"traceId"`
 	TracerVersion TracerVersion `json:"tracer"`
+	HttpInfo      *SpanHttpInfo `json:"httpInfo"`
+}
+
+// SpanHttpInfo extra info for HTTP reuquests
+type SpanHttpInfo struct {
+	Host     string         `json:"host"`
+	Request  SpanHttpCommon `json:"request"`
+	Response SpanHttpCommon `json:"response"`
+}
+
+// SpanHttpRequest the span for the HTTP request
+type SpanHttpCommon struct {
+	URI        *string  `json:"uri"`
+	StatusCode *int     `json:"statusCode"`
+	InstanceID string   `json:"instance_id"`
+	Body       *string  `json:"body"`
+	Headers    []string `json:"headers"`
 }
 
 // SpanError the extra info if lambda returned

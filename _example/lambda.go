@@ -4,19 +4,37 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	lumigotracer "github.com/lumigo-io/go-tracer-beta"
 )
+
+var client *http.Client
 
 type MyEvent struct {
 	Name string `json:"name"`
 }
 
+func init() {
+	client = &http.Client{
+		Transport: lumigotracer.NewTransport(http.DefaultTransport),
+	}
+}
+
 func HandleRequest(ctx context.Context, name MyEvent) (events.APIGatewayProxyResponse, error) {
+	cfg, _ := lumigotracer.LoadAWSConfig(ctx)
+	s3Client := s3.NewFromConfig(cfg)
+	input := &s3.ListBucketsInput{}
+	_, err := s3Client.ListBuckets(ctx, input)
+	if err != nil {
+		return events.APIGatewayProxyResponse{Body: "", StatusCode: 500}, err
+	}
+	lumigotracer.TraceAWSClients(&cfg)
 	response := fmt.Sprintf("Hello %s!", name.Name)
 	returnErr, ok := os.LookupEnv("RETURN_ERROR")
 	if !ok {
@@ -35,7 +53,8 @@ func HandleRequest(ctx context.Context, name MyEvent) (events.APIGatewayProxyRes
 func main() {
 	os.Setenv("LUMIGO_DEBUG", "true")
 	wrappedHandler := lumigotracer.WrapHandler(HandleRequest, &lumigotracer.Config{
-		Token: "t_f2956385a53a4dcb9aea0",
+		Token:       "t_f2956385a53a4dcb9aea0",
+		PrintStdout: true,
 	})
 	lambda.Start(wrappedHandler)
 }

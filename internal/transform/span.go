@@ -146,6 +146,7 @@ func (m *mapper) Transform() telemetry.Span {
 	lambdaType := "function"
 	if m.span.Name() != lumigoSpan.LambdaName && m.span.Name() != "LumigoParentSpan" {
 		lambdaType = "http"
+		lumigoSpan.SpanInfo.HttpInfo = m.getHTTPInfo(attrs)
 	}
 	lumigoSpan.LambdaType = lambdaType
 
@@ -154,35 +155,6 @@ func (m *mapper) Transform() telemetry.Span {
 	}
 	lumigoSpan.LambdaEnvVars = m.getEnvVars()
 	return lumigoSpan
-}
-
-func isProvisionConcurrencyInitialization() bool {
-	return os.Getenv("AWS_LAMBDA_INITIALIZATION_TYPE") == "provisioned-concurrency"
-}
-
-func getAccountID(ctx *lambdacontext.LambdaContext) (string, error) {
-	functionARN, err := arn.Parse(ctx.InvokedFunctionArn)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to parse ARN")
-	}
-	return functionARN.AccountID, nil
-}
-
-func getAmazonTraceID() string {
-	awsTraceItems := strings.SplitN(os.Getenv("_X_AMZN_TRACE_ID"), ";", 2)
-	if len(awsTraceItems) > 1 {
-		root := strings.SplitN(awsTraceItems[0], "=", 2)
-		return root[1]
-	}
-	return ""
-}
-
-func getTransactionID(root string) string {
-	items := strings.SplitN(root, "-", 3)
-	if len(items) > 1 {
-		return items[2]
-	}
-	return ""
 }
 
 func (m *mapper) getSpanError(attrs map[string]interface{}) *telemetry.SpanError {
@@ -224,4 +196,51 @@ func (m *mapper) getEnvVars() string {
 		m.logger.Error("unable to fetch lambda environment vars")
 	}
 	return string(envsString)
+}
+
+func (m *mapper) getHTTPInfo(attrs map[string]interface{}) *telemetry.SpanHttpInfo {
+	var spanHttpInfo telemetry.SpanHttpInfo
+	if host, ok := attrs["http.host"]; ok {
+		spanHttpInfo.Host = fmt.Sprint(host)
+	}
+
+	if target, ok := attrs["http.target"]; ok {
+		uri := fmt.Sprintf("%s%s", spanHttpInfo.Host, target)
+		spanHttpInfo.Request.URI = aws.String(uri)
+	}
+
+	if code, ok := attrs["http.status_code"]; ok {
+		spanHttpInfo.Response.StatusCode = aws.Int(code.(int))
+	}
+
+	return &spanHttpInfo
+}
+
+func isProvisionConcurrencyInitialization() bool {
+	return os.Getenv("AWS_LAMBDA_INITIALIZATION_TYPE") == "provisioned-concurrency"
+}
+
+func getAccountID(ctx *lambdacontext.LambdaContext) (string, error) {
+	functionARN, err := arn.Parse(ctx.InvokedFunctionArn)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to parse ARN")
+	}
+	return functionARN.AccountID, nil
+}
+
+func getAmazonTraceID() string {
+	awsTraceItems := strings.SplitN(os.Getenv("_X_AMZN_TRACE_ID"), ";", 2)
+	if len(awsTraceItems) > 1 {
+		root := strings.SplitN(awsTraceItems[0], "=", 2)
+		return root[1]
+	}
+	return ""
+}
+
+func getTransactionID(root string) string {
+	items := strings.SplitN(root, "-", 3)
+	if len(items) > 1 {
+		return items[2]
+	}
+	return ""
 }
