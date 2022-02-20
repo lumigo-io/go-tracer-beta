@@ -36,8 +36,9 @@ type SpanHttpInfo struct {
 // SpanHttpRequest the span for the HTTP request
 type SpanHttpCommon struct {
 	URI        *string  `json:"uri"`
+	Method     *string  `json:"method"`
 	StatusCode *int     `json:"statusCode"`
-	InstanceID string   `json:"instance_id"`
+	InstanceID *string  `json:"instance_id"`
 	Body       *string  `json:"body"`
 	Headers    []string `json:"headers"`
 }
