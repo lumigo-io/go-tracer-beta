@@ -1,7 +1,9 @@
 
 ![CircleCI](https://circleci.com/gh/lumigo-io/go-tracer-beta/tree/master.svg?style=svg&circle-token=421fefe82bcad1c17c4116f154e25e32ebc90f2c)
 [![Go Report Card](https://goreportcard.com/badge/github.com/lumigo-io/go-tracer-beta)](https://goreportcard.com/report/github.com/lumigo-io/go-tracer-beta)
+[![codecov](https://codecov.io/gh/lumigo-io/go-tracer-beta/branch/master/graph/badge.svg?token=x49mnWnhaz)](https://codecov.io/gh/lumigo-io/go-tracer-beta)
 [![GoDoc](https://godoc.org/github.com/lumigo-io/go-tracer-beta?status.svg)](https://godoc.org/github.com/lumigo-io/go-tracer-beta)
+
 
 # go-tracer (BETA)
 
