@@ -315,6 +315,45 @@ func TestTransform(t *testing.T) {
 				os.Unsetenv("IS_WARM_START")
 			},
 		},
+		{
+			testname: "span http",
+			input: &tracetest.SpanStub{
+				SpanContext: trace.NewSpanContext(trace.SpanContextConfig{
+					TraceID: traceID,
+					SpanID:  spanID,
+				}),
+				StartTime: now,
+				EndTime:   now.Add(1 * time.Second),
+				Name:      "HttpSpan",
+				Attributes: []attribute.KeyValue{
+					attribute.String("http.method", "test"),
+				},
+			},
+			expect: telemetry.Span{
+				LambdaName:       "test",
+				LambdaType:       "function",
+				LambdaReadiness:  "warm",
+				LambdaResponse:   nil,
+				Event:            "test",
+				Account:          "account-id",
+				ID:               mockLambdaContext.AwsRequestID,
+				StartedTimestamp: now.UnixMilli(),
+				EndedTimestamp:   now.Add(1 * time.Second).UnixMilli(),
+				SpanError: &telemetry.SpanError{
+					Type:       "TestError",
+					Message:    "failed error",
+					Stacktrace: "failed error",
+				},
+			},
+			before: func() {
+				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
+				os.Setenv("IS_WARM_START", "true")
+			},
+			after: func() {
+				os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
+				os.Unsetenv("IS_WARM_START")
+			},
+		},
 	}
 
 	for _, tc := range testcases {

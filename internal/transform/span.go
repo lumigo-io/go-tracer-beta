@@ -50,6 +50,7 @@ func (m *mapper) Transform() telemetry.Span {
 	}
 	for _, kv := range m.span.Attributes() {
 		attrs[string(kv.Key)] = kv.Value.AsInterface()
+		m.logger.WithField(string(kv.Key), kv.Value.AsInterface()).Info()
 	}
 
 	m.logger.WithFields(attrs).Info("span attributes")
@@ -205,7 +206,7 @@ func (m *mapper) getHTTPInfo(attrs map[string]interface{}) *telemetry.SpanHttpIn
 	}
 
 	if method, ok := attrs["http.method"]; ok {
-		spanHttpInfo.Host = fmt.Sprint(method)
+		spanHttpInfo.Request.Method = aws.String(fmt.Sprint(method))
 	}
 
 	if target, ok := attrs["http.target"]; ok {
@@ -213,8 +214,16 @@ func (m *mapper) getHTTPInfo(attrs map[string]interface{}) *telemetry.SpanHttpIn
 		spanHttpInfo.Request.URI = aws.String(uri)
 	}
 
+	if headers, ok := attrs["http.request_headers"]; ok {
+		spanHttpInfo.Request.Headers = fmt.Sprint(headers)
+	}
+
 	if reqBody, ok := attrs["http.request_body"]; ok {
 		spanHttpInfo.Request.Body = aws.String(fmt.Sprint(reqBody))
+	}
+
+	if headers, ok := attrs["http.response_headers"]; ok {
+		spanHttpInfo.Response.Headers = fmt.Sprint(headers)
 	}
 
 	// response
@@ -223,7 +232,7 @@ func (m *mapper) getHTTPInfo(attrs map[string]interface{}) *telemetry.SpanHttpIn
 	}
 
 	if code, ok := attrs["http.status_code"]; ok {
-		spanHttpInfo.Response.StatusCode = aws.Int(code.(int))
+		spanHttpInfo.Response.StatusCode = aws.Int64(code.(int64))
 	}
 
 	return &spanHttpInfo
