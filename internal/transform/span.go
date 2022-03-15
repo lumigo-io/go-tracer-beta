@@ -10,7 +10,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/google/uuid"
 	lumigoctx "github.com/lumigo-io/go-tracer-beta/internal/context"
 	"github.com/lumigo-io/go-tracer-beta/internal/telemetry"
@@ -65,11 +65,41 @@ func (m *mapper) Transform() telemetry.Span {
 	}
 
 	isStartSpan := telemetry.IsStartSpan(m.span)
+	lumigoSpan.Region = os.Getenv("AWS_REGION")
+	lumigoSpan.MemoryAllocated = os.Getenv("AWS_LAMBDA_FUNCTION_MEMORY_SIZE")
+	lumigoSpan.Runtime = os.Getenv("AWS_EXECUTION_ENV")
+	lumigoSpan.LambdaName = os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
+
+	awsRoot := getAmazonTraceID()
+	if awsRoot == "" {
+		m.logger.Error("unable to fetch Amazon Trace ID")
+	}
+	lumigoSpan.SpanInfo = telemetry.SpanInfo{
+		LogStreamName: os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME"),
+		LogGroupName:  os.Getenv("AWS_LAMBDA_LOG_GROUP_NAME"),
+		TraceID: telemetry.SpanTraceRoot{
+			Root: awsRoot,
+		},
+	}
+
+	lambdaType := "function"
+	if m.span.Name() != lumigoSpan.LambdaName && m.span.Name() != "LumigoParentSpan" {
+		lambdaType = "http"
+		lumigoSpan.SpanInfo.HttpInfo = m.getHTTPInfo(attrs)
+	}
+	lumigoSpan.LambdaType = lambdaType
+
 	lambdaCtx, lambdaOk := lambdacontext.FromContext(m.ctx)
 	if lambdaOk {
-		uuid, _ := uuid.NewUUID()
-		lumigoSpan.LambdaContainerID = uuid.String()
-		lumigoSpan.ID = lambdaCtx.AwsRequestID
+		containerID, _ := uuid.NewUUID()
+		lumigoSpan.LambdaContainerID = containerID.String()
+
+		if lambdaType == "http" {
+			spanID, _ := uuid.NewUUID()
+			lumigoSpan.ID = spanID.String()
+		} else {
+			lumigoSpan.ID = lambdaCtx.AwsRequestID
+		}
 
 		if isStartSpan {
 			lumigoSpan.ID = fmt.Sprintf("%s_started", lumigoSpan.ID)
@@ -105,23 +135,6 @@ func (m *mapper) Transform() telemetry.Span {
 		m.logger.Error("unable to fetch lambda response from span")
 	}
 
-	lumigoSpan.Region = os.Getenv("AWS_REGION")
-	lumigoSpan.MemoryAllocated = os.Getenv("AWS_LAMBDA_FUNCTION_MEMORY_SIZE")
-	lumigoSpan.Runtime = os.Getenv("AWS_EXECUTION_ENV")
-	lumigoSpan.LambdaName = os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
-
-	awsRoot := getAmazonTraceID()
-	if awsRoot == "" {
-		m.logger.Error("unable to fetch Amazon Trace ID")
-	}
-	lumigoSpan.SpanInfo = telemetry.SpanInfo{
-		LogStreamName: os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME"),
-		LogGroupName:  os.Getenv("AWS_LAMBDA_LOG_GROUP_NAME"),
-		TraceID: telemetry.SpanTraceRoot{
-			Root: awsRoot,
-		},
-	}
-
 	if transactionID := getTransactionID(awsRoot); transactionID != "" {
 		lumigoSpan.TransactionID = transactionID
 	} else {
@@ -143,13 +156,6 @@ func (m *mapper) Transform() telemetry.Span {
 	} else {
 		lumigoSpan.LambdaReadiness = "warm"
 	}
-
-	lambdaType := "function"
-	if m.span.Name() != lumigoSpan.LambdaName && m.span.Name() != "LumigoParentSpan" {
-		lambdaType = "http"
-		lumigoSpan.SpanInfo.HttpInfo = m.getHTTPInfo(attrs)
-	}
-	lumigoSpan.LambdaType = lambdaType
 
 	if !isStartSpan {
 		lumigoSpan.SpanError = m.getSpanError(attrs)
