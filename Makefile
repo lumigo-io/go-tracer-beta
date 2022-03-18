@@ -21,10 +21,15 @@ OUTDATED_BIN := ./bin/go-mod-outdated
 OUTDATED_GEN := $(TOOLS_BIN_DIR)/$(OUTDATED_BIN)
 
 .PHONY: build-relesae
-## build: build the executable
+## build-example: build the executable
 build-example:
 	@echo Building example
 	GOOS=linux CGO_ENABLED=0 go build -ldflags="-s -w" -o _example/terraform/bin/otel ./_example
+
+## build-e2e: build the executable for e2e
+build-e2e:
+	@echo Building example
+	GOOS=linux CGO_ENABLED=0 go build -ldflags="-s -w" -o ${LAMBDA_E2E_BIN_DIR}/otel ${LAMBDA_E2E_DIR}
 
 .PHONY: deploy
 ## deploy-example: deploys lambda function example
@@ -41,6 +46,12 @@ destroy-example: build-example
 	cd _example/terraform && \
 	terraform destroy --auto-approve
 
+.PHONY: dist-example
+## dist-e2e
+dist-e2e: clean build-e2e
+	@echo Creating a zip for lambda e2e
+	cd ${LAMBDA_E2E_BIN_DIR}; zip -q -9 lambda.zip otel
+
 .PHONY: checks
 ## checks: Run check-style and test
 checks: setup check-style test
@@ -55,6 +66,7 @@ check-style: govet lint
 clean:
 	rm -rf build/_output/bin/
 	rm -rf bin
+	rm -rf dist
 
 .PHONY: vet
 ## govet: Runs govet against all packages.
