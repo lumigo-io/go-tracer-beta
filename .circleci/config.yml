@@ -19,7 +19,7 @@ aliases:
       - "/go/pkg/mod"
 
 jobs:
-  checks:
+  test:
     executor:
       name: default
     steps:
@@ -41,7 +41,7 @@ jobs:
 workflows:
   ci-build:
     jobs:
-    - checks
+    - test
     - lumigo-orb/be-deploy:
         filters:
           branches:
@@ -59,7 +59,7 @@ workflows:
 
   master-build:
     jobs:
-    - checks:
+    - test:
         filters:
           branches:
             only:
