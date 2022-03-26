@@ -39,7 +39,7 @@ type SpanHttpCommon struct {
 	Method     *string `json:"method,omitempty"`
 	StatusCode *int64  `json:"statusCode,omitempty"`
 	InstanceID *string `json:"instance_id,omitempty"`
-	Body       *string `json:"body,omitempty"`
+	Body       string  `json:"body,omitempty"`
 	Headers    string  `json:"headers,omitempty"`
 }
 

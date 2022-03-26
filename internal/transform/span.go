@@ -225,7 +225,7 @@ func (m *mapper) getHTTPInfo(attrs map[string]interface{}) *telemetry.SpanHttpIn
 	}
 
 	if reqBody, ok := attrs["http.request_body"]; ok {
-		spanHttpInfo.Request.Body = aws.String(fmt.Sprint(reqBody))
+		spanHttpInfo.Request.Body = fmt.Sprint(reqBody)
 	}
 
 	if headers, ok := attrs["http.response_headers"]; ok {
@@ -234,7 +234,7 @@ func (m *mapper) getHTTPInfo(attrs map[string]interface{}) *telemetry.SpanHttpIn
 
 	// response
 	if respBody, ok := attrs["http.response_body"]; ok {
-		spanHttpInfo.Response.Body = aws.String(fmt.Sprint(respBody))
+		spanHttpInfo.Response.Body = fmt.Sprint(respBody)
 	}
 
 	if code, ok := attrs["http.status_code"]; ok {

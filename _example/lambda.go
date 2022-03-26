@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -16,7 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go/aws"
 	lumigotracer "github.com/lumigo-io/go-tracer-beta"
-	"golang.org/x/net/context/ctxhttp"
 )
 
 type MyEvent struct {
@@ -36,6 +34,10 @@ func HandleRequest(ctx context.Context, name MyEvent) (events.APIGatewayProxyRes
 		return events.APIGatewayProxyResponse{Body: "", StatusCode: 500}, err
 	}
 
+	svc.CreateBucket(context.Background(), &s3.CreateBucketInput{
+		Bucket: aws.String("test-bucket-go-tracer-2"),
+	})
+
 	// testing SSM
 	ssmClient := ssm.NewFromConfig(cfg)
 	input := &ssm.GetParameterInput{
@@ -44,21 +46,6 @@ func HandleRequest(ctx context.Context, name MyEvent) (events.APIGatewayProxyRes
 	_, err = ssmClient.GetParameter(context.Background(), input)
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "ssm error", StatusCode: 500}, err
-	}
-
-	// testing ctxhttp
-	req, err := http.NewRequest("GET", "https://www.google.com", nil)
-	if err != nil {
-		panic(err)
-	}
-	res, err := ctxhttp.Do(context.Background(), client, req)
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = ioutil.ReadAll(res.Body)
-	if err != nil {
-		panic(err)
 	}
 	response := fmt.Sprintf("Hello %s!", name.Name)
 

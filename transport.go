@@ -42,7 +42,7 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 	if req.Body != nil {
 		bodyBytes, bodyErr := io.ReadAll(req.Body)
 		if bodyErr != nil {
-			return
+			logger.WithError(bodyErr).Error("failed to parse request body")
 		}
 		span.SetAttributes(attribute.String("http.request_body", string(bodyBytes)))
 		// restore body
@@ -62,35 +62,32 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 	span.SetAttributes(attribute.String("http.request_headers", string(headersJson)))
 
 	resp, err = t.rt.RoundTrip(req)
-	if err != nil {
-		return
-	}
 
 	// response
 	span.SetAttributes(semconv.HTTPAttributesFromHTTPStatusCode(resp.StatusCode)...)
 	span.SetStatus(semconv.SpanStatusFromHTTPStatusCode(resp.StatusCode))
 
-	if resp.Body != nil {
-		bodyBytes, bodyErr := io.ReadAll(resp.Body)
-		if bodyErr != nil {
-			return
-		}
-		span.SetAttributes(attribute.String("http.response_body", string(bodyBytes)))
-		resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
-	}
 	responseHeaders := make(map[string]string)
 	for k, values := range resp.Header {
 		for _, value := range values {
 			responseHeaders[k] = value
 		}
 	}
-	headersJson, err = json.Marshal(responseHeaders)
-	if err != nil {
+	headersJson, jsonErr := json.Marshal(responseHeaders)
+	if jsonErr != nil {
 		logger.WithError(err).Error("failed to fetch response headers")
 	}
 	span.SetAttributes(attribute.String("http.response_headers", string(headersJson)))
-	resp.Body = &wrappedBody{ctx: traceCtx, span: span, body: resp.Body}
 
+	if resp.Body != nil {
+		bodyBytes, bodyErr := io.ReadAll(resp.Body)
+		if bodyErr != nil {
+			logger.WithError(bodyErr).Error("failed to parse response body")
+		}
+		span.SetAttributes(attribute.String("http.response_body", string(bodyBytes)))
+		resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+	}
+	resp.Body = &wrappedBody{ctx: traceCtx, span: span, body: resp.Body}
 	return resp, err
 }
 
