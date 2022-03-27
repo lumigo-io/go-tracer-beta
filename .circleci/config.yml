@@ -41,7 +41,10 @@ jobs:
 workflows:
   ci-build:
     jobs:
-    - test
+    - test:
+        filters:
+          branches:
+            ignore: master
     - lumigo-orb/be-deploy:
         filters:
           branches:
