@@ -41,7 +41,7 @@ jobs:
 workflows:
   ci-build:
     jobs:
-    - testy:
+    - test:
         filters:
           branches:
             ignore: master
