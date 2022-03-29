@@ -1,6 +1,7 @@
 package lumigotracer
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -62,6 +63,8 @@ func (w *wrapperTestSuite) TearDownTest() {
 	_ = os.Unsetenv("AWS_LAMBDA_LOG_GROUP_NAME")
 	_ = os.Unsetenv("AWS_LAMBDA_FUNCTION_VERSION")
 	_ = os.Unsetenv("_X_AMZN_TRACE_ID")
+
+	deleteAllFiles()
 }
 
 func (w *wrapperTestSuite) TestLambdaHandlerSignatures() {
@@ -229,10 +232,14 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 			isHttp:   true,
 			expected: expected{`"Hello test!"`, nil},
 			handler: func(ctx context.Context, name string) (string, error) {
-				r, err := http.NewRequestWithContext(ctx, http.MethodGet, ts.URL, nil)
+				postBody, _ := json.Marshal(map[string]string{
+					"name": "test",
+				})
+				r, err := http.NewRequestWithContext(ctx, http.MethodPost, ts.URL, bytes.NewBuffer(postBody))
 				if err != nil {
 					w.T().Fatal(err)
 				}
+				r.Header.Set("Agent", "test")
 				c := &http.Client{Transport: NewTransport(http.DefaultTransport)}
 				ctxhttp.Do(context.Background(), c, r) // nolint
 
@@ -277,11 +284,11 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 			assert.Equal(w.T(), version, lumigoStart.SpanInfo.TracerVersion.Version)
 			if lumigoStart.LambdaType == "http" {
 				assert.NotNil(w.T(), lumigoStart.SpanInfo.HttpInfo)
-				assert.Equal(w.T(), ts.URL, lumigoStart.SpanInfo.HttpInfo.Host)
+				assert.Equal(w.T(), ts.URL, fmt.Sprintf("http://%s", lumigoStart.SpanInfo.HttpInfo.Host))
 				assert.Equal(w.T(), fmt.Sprintf("%s/", ts.URL), lumigoStart.SpanInfo.HttpInfo.Request.URI)
-				assert.Equal(w.T(), "GET", lumigoStart.SpanInfo.HttpInfo.Request.Method)
+				assert.Equal(w.T(), "POST", lumigoStart.SpanInfo.HttpInfo.Request.Method)
 				assert.Equal(w.T(), `{\"name\": \"test\"}`, lumigoStart.SpanInfo.HttpInfo.Request.Body)
-				assert.Equal(w.T(), `{\"Agent\": \"test\"}`, lumigoStart.SpanInfo.HttpInfo.Request.Headers)
+				assert.Contains(w.T(), `"Agent": "test"`, lumigoStart.SpanInfo.HttpInfo.Request.Headers)
 			}
 
 			lumigoEnd := spans.endSpan[0]
@@ -299,8 +306,8 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 
 			if lumigoStart.LambdaType == "http" {
 				assert.Equal(w.T(), 200, lumigoStart.SpanInfo.HttpInfo.Response.StatusCode)
-				assert.Equal(w.T(), `{\"response\": \"test\"}`, lumigoStart.SpanInfo.HttpInfo.Response.Body)
-				assert.Equal(w.T(), `{\"Agent\": \"test\"}`, lumigoStart.SpanInfo.HttpInfo.Response.Headers)
+				assert.Equal(w.T(), `Hello, world!`, lumigoStart.SpanInfo.HttpInfo.Response.Body)
+				assert.Contains(w.T(), `"Content-Length": "13"`, lumigoStart.SpanInfo.HttpInfo.Response.Headers)
 			}
 
 			if testCase.expected.err != nil {

@@ -209,36 +209,52 @@ func (m *mapper) getHTTPInfo(attrs map[string]interface{}) *telemetry.SpanHttpIn
 	var spanHttpInfo telemetry.SpanHttpInfo
 	if host, ok := attrs["http.host"]; ok {
 		spanHttpInfo.Host = fmt.Sprint(host)
+	} else {
+		m.logger.Error("unable to fetch HTTP host")
 	}
 
 	if method, ok := attrs["http.method"]; ok {
 		spanHttpInfo.Request.Method = aws.String(fmt.Sprint(method))
+	} else {
+		m.logger.Error("unable to fetch HTTP method")
 	}
 
 	if target, ok := attrs["http.target"]; ok {
 		uri := fmt.Sprintf("%s%s", spanHttpInfo.Host, target)
 		spanHttpInfo.Request.URI = aws.String(uri)
+	} else {
+		m.logger.Error("unable to fetch HTTP target")
 	}
 
 	if headers, ok := attrs["http.request_headers"]; ok {
 		spanHttpInfo.Request.Headers = fmt.Sprint(headers)
+	} else {
+		m.logger.Error("unable to fetch HTTP request headers")
 	}
 
 	if reqBody, ok := attrs["http.request_body"]; ok {
 		spanHttpInfo.Request.Body = fmt.Sprint(reqBody)
+	} else {
+		m.logger.Error("unable to fetch HTTP request body")
 	}
 
 	if headers, ok := attrs["http.response_headers"]; ok {
 		spanHttpInfo.Response.Headers = fmt.Sprint(headers)
+	} else {
+		m.logger.Error("unable to fetch HTTP response headers")
 	}
 
 	// response
 	if respBody, ok := attrs["http.response_body"]; ok {
 		spanHttpInfo.Response.Body = fmt.Sprint(respBody)
+	} else {
+		m.logger.Error("unable to fetch HTTP response body")
 	}
 
 	if code, ok := attrs["http.status_code"]; ok {
 		spanHttpInfo.Response.StatusCode = aws.Int64(code.(int64))
+	} else {
+		m.logger.Error("unable to fetch HTTP status code")
 	}
 
 	return &spanHttpInfo
