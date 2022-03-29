@@ -6,6 +6,7 @@ executors:
 
 orbs:
   gh: circleci/github-cli@1.0
+  lumigo-orb: lumigo/lumigo-orb@volatile
 
 aliases:
 - &restore_cache
@@ -18,7 +19,7 @@ aliases:
       - "/go/pkg/mod"
 
 jobs:
-  checks:
+  test:
     executor:
       name: default
     steps:
@@ -40,11 +41,28 @@ jobs:
 workflows:
   ci-build:
     jobs:
-    - checks
+    - test:
+        filters:
+          branches:
+            ignore: master
+    - lumigo-orb/be-deploy:
+        filters:
+          branches:
+            ignore: master
+        requires:
+          - test
+    - lumigo-orb/integration-test:
+        deploy_spec: default
+        tests_spec: testNormal
+        filters:
+          branches:
+            ignore: master
+        requires:
+          - lumigo-orb/be-deploy
 
   master-build:
     jobs:
-    - checks:
+    - test:
         filters:
           branches:
             only:
