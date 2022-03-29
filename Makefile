@@ -29,7 +29,10 @@ build-example:
 ## build-e2e: build the executable for e2e
 build-e2e:
 	@echo Building example
-	GOOS=linux CGO_ENABLED=0 go build -ldflags="-s -w" -o ${LAMBDA_E2E_BIN_DIR}/otel ${LAMBDA_E2E_DIR}
+	mkdir -p e2e-tmp/
+	cp -r ${LAMBDA_E2E_DIR}/* e2e-tmp
+	GOOS=linux CGO_ENABLED=0 go build -ldflags="-s -w" -o ${LAMBDA_E2E_BIN_DIR}/otel ./e2e-tmp
+	rm -rf e2e-tmp
 
 .PHONY: deploy
 ## deploy-example: deploys lambda function example
