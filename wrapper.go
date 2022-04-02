@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go-v2/aws"
 	lumigoctx "github.com/lumigo-io/go-tracer-beta/internal/context"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -68,12 +67,6 @@ func WrapHandler(handler interface{}, conf *Config) interface{} {
 
 		return json.RawMessage(response), lambdaErr
 	}
-}
-
-// WrapHandlerWithAWSConfig wraps the lambda handler passing AWS Config
-func WrapHandlerWithAWSConfig(handler interface{}, cfg *Config, awsConfig *aws.Config) interface{} {
-	TraceAWSClients(awsConfig)
-	return WrapHandler(handler, cfg)
 }
 
 // newResource returns a resource describing this application.

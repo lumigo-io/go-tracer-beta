@@ -238,41 +238,6 @@ func TestTransform(t *testing.T) {
 			},
 		},
 		{
-			testname: "span from S3 or HTTP is type http",
-			input: &tracetest.SpanStub{
-				SpanContext: trace.NewSpanContext(trace.SpanContextConfig{
-					TraceID: traceID,
-					SpanID:  spanID,
-				}),
-				StartTime: now,
-				EndTime:   now.Add(1 * time.Second),
-				Name:      "S3 HTTP",
-				Attributes: []attribute.KeyValue{
-					attribute.String("event", "test"),
-					attribute.String("response", "test2"),
-				},
-			},
-			expect: telemetry.Span{
-				LambdaName:       "test",
-				LambdaType:       "http",
-				LambdaReadiness:  "warm",
-				LambdaResponse:   aws.String("test2"),
-				Event:            "test",
-				Account:          "account-id",
-				ID:               mockLambdaContext.AwsRequestID,
-				StartedTimestamp: now.UnixMilli(),
-				EndedTimestamp:   now.Add(1 * time.Second).UnixMilli(),
-			},
-			before: func() {
-				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
-				os.Setenv("IS_WARM_START", "true")
-			},
-			after: func() {
-				os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
-				os.Unsetenv("IS_WARM_START")
-			},
-		},
-		{
 			testname: "span with error",
 			input: &tracetest.SpanStub{
 				SpanContext: trace.NewSpanContext(trace.SpanContextConfig{
@@ -315,6 +280,64 @@ func TestTransform(t *testing.T) {
 				os.Unsetenv("IS_WARM_START")
 			},
 		},
+		{
+			testname: "span http success",
+			input: &tracetest.SpanStub{
+				SpanContext: trace.NewSpanContext(trace.SpanContextConfig{
+					TraceID: traceID,
+					SpanID:  spanID,
+				}),
+				StartTime: now,
+				EndTime:   now.Add(1 * time.Second),
+				Name:      "HttpSpan",
+				Attributes: []attribute.KeyValue{
+					attribute.String("http.host", "s3.aws.com"),
+					attribute.String("http.target", "/"),
+					attribute.String("http.method", "POST"),
+					attribute.Int64("http.status_code", 200),
+					attribute.String("http.request_headers", `{"Agent": "test"}`),
+					attribute.String("http.request_body", `{"name": "test"}`),
+					attribute.String("http.response_headers", `{"Agent": "test"}`),
+					attribute.String("http.response_body", `{"response": "test"}`),
+					attribute.String("event", "test"),
+				},
+			},
+			expect: telemetry.Span{
+				LambdaName:       "test",
+				LambdaType:       "http",
+				LambdaReadiness:  "warm",
+				LambdaResponse:   nil,
+				Event:            "test",
+				Account:          "account-id",
+				ID:               mockLambdaContext.AwsRequestID,
+				StartedTimestamp: now.UnixMilli(),
+				EndedTimestamp:   now.Add(1 * time.Second).UnixMilli(),
+				SpanInfo: telemetry.SpanInfo{
+					HttpInfo: &telemetry.SpanHttpInfo{
+						Host: "s3.aws.com",
+						Request: telemetry.SpanHttpCommon{
+							URI:     aws.String("s3.aws.com/"),
+							Method:  aws.String("POST"),
+							Headers: `{"Agent": "test"}`,
+							Body:    `{"name": "test"}`,
+						},
+						Response: telemetry.SpanHttpCommon{
+							StatusCode: aws.Int64(200),
+							Headers:    `{"Agent": "test"}`,
+							Body:       `{"response": "test"}`,
+						},
+					},
+				},
+			},
+			before: func() {
+				os.Setenv("AWS_LAMBDA_FUNCTION_NAME", "test")
+				os.Setenv("IS_WARM_START", "true")
+			},
+			after: func() {
+				os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
+				os.Unsetenv("IS_WARM_START")
+			},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -327,6 +350,9 @@ func TestTransform(t *testing.T) {
 		lumigoSpan.LambdaContainerID = ""
 		// intentionally ignore MaxFinishTime, cannot be matched
 		lumigoSpan.MaxFinishTime = 0
+		if lumigoSpan.LambdaType == "http" {
+			lumigoSpan.ID = mockLambdaContext.AwsRequestID
+		}
 		if !reflect.DeepEqual(lumigoSpan, tc.expect) {
 			t.Errorf("%s: %#v != %#v", tc.testname, lumigoSpan, tc.expect)
 		}

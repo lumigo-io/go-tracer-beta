@@ -61,6 +61,41 @@ func main() {
 }
 ```
 
+For tracing AWS SDK v2.0 calls check the following example:
+
+```go
+  client := &http.Client{
+    Transport: lumigotracer.NewTransport(http.DefaultTransport),
+  }
+
+  // for AWS SDK v1.x
+  sess := session.Must(session.NewSession(&aws.Config{
+    HTTPClient: client,
+  }))
+
+  svc := s3.New(sess)
+  
+  // for AWS SDK v2.x
+  cfg, _ := config.LoadDefaultConfig(context.Background(), config.WithHTTPClient(client))
+	svc := s3.NewFromConfig(cfg)
+
+```
+
+For tracing HTTP calls check the following example:
+
+```go
+  client := &http.Client{
+    Transport: lumigotracer.NewTransport(http.DefaultTransport),
+  }
+	req, _ := http.NewRequest("GET", "https://<your-url>", nil)
+
+  // for net/http
+	res, err := client.Do(req)
+
+  // for golang.org/x/net/context/ctxhttp
+	res, err := ctxhttp.Do(context.Background(), client, req)
+```
+
 In your lambda environment variables you need to set `LUMIGO_USE_TRACER_EXTENSION: true` and use the following layer for `us-east-1`: `arn:aws:lambda:us-east-1:114300393969:layer:lumigo-tracer-extension:36`. The layer will be available in more regions soon.
 
 ## Contributing

@@ -1,10 +1,14 @@
 package lumigotracer
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"testing"
@@ -13,6 +17,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"golang.org/x/net/context/ctxhttp"
 )
 
 var (
@@ -181,11 +186,19 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 	hello := func(s string) string {
 		return fmt.Sprintf("Hello %s!", s)
 	}
+	content := []byte("Hello, world!")
+	ts := httptest.NewServer(http.HandlerFunc(func(wr http.ResponseWriter, r *http.Request) {
+		if _, err := wr.Write(content); err != nil {
+			w.T().Fatal(err)
+		}
+	}))
 	testCases := []struct {
-		name     string
-		input    interface{}
-		expected expected
-		handler  interface{}
+		name       string
+		lambdaType string
+		isHttp     bool
+		input      interface{}
+		expected   expected
+		handler    interface{}
 	}{
 		{
 			name:     "input: string, with context",
@@ -211,6 +224,36 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 				return nil, errors.New("failed error")
 			},
 		},
+		{
+			name:     "ctxhttp transport",
+			input:    "test",
+			isHttp:   true,
+			expected: expected{`"Hello test!"`, nil},
+			handler: func(ctx context.Context, name string) (string, error) {
+				postBody, _ := json.Marshal(map[string]string{
+					"name": "test",
+				})
+				r, err := http.NewRequestWithContext(ctx, http.MethodPost, ts.URL, bytes.NewBuffer(postBody))
+				if err != nil {
+					w.T().Fatal(err)
+				}
+				r.Header.Set("Agent", "test")
+				c := &http.Client{Transport: NewTransport(http.DefaultTransport)}
+				ctxhttp.Do(context.Background(), c, r) // nolint
+
+				res, err := ctxhttp.Do(ctx, c, r)
+				if err != nil {
+					w.T().Fatal(err)
+				}
+
+				_, err = ioutil.ReadAll(res.Body)
+				if err != nil {
+					w.T().Fatal(err)
+				}
+
+				return hello(name), nil
+			},
+		},
 	}
 	testContext := lambdacontext.NewContext(mockContext, &mockLambdaContext)
 	for i, testCase := range testCases {
@@ -229,7 +272,6 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 			assert.Equal(w.T(), "account-id", lumigoStart.Account)
 			assert.Equal(w.T(), "token", lumigoStart.Token)
 			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), lumigoStart.LambdaName)
-			assert.Equal(w.T(), "function", lumigoStart.LambdaType)
 			assert.Equal(w.T(), "go", lumigoStart.Runtime)
 			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME"), lumigoStart.SpanInfo.LogStreamName)
 			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_LOG_GROUP_NAME"), lumigoStart.SpanInfo.LogGroupName)
@@ -238,12 +280,19 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 			assert.Equal(w.T(), "bd862e3fe1be46a994272793", lumigoStart.TransactionID)
 			assert.Equal(w.T(), string(inputPayload), lumigoStart.Event)
 			assert.Equal(w.T(), version, lumigoStart.SpanInfo.TracerVersion.Version)
+			if lumigoStart.LambdaType == "http" {
+				assert.NotNil(w.T(), lumigoStart.SpanInfo.HttpInfo)
+				assert.Equal(w.T(), ts.URL, fmt.Sprintf("http://%s", lumigoStart.SpanInfo.HttpInfo.Host))
+				assert.Equal(w.T(), fmt.Sprintf("%s/", ts.URL), lumigoStart.SpanInfo.HttpInfo.Request.URI)
+				assert.Equal(w.T(), "POST", lumigoStart.SpanInfo.HttpInfo.Request.Method)
+				assert.Equal(w.T(), `{\"name\": \"test\"}`, lumigoStart.SpanInfo.HttpInfo.Request.Body)
+				assert.Contains(w.T(), `"Agent": "test"`, lumigoStart.SpanInfo.HttpInfo.Request.Headers)
+			}
 
 			lumigoEnd := spans.endSpan[0]
 			assert.Equal(w.T(), "account-id", lumigoEnd.Account)
 			assert.Equal(w.T(), "token", lumigoEnd.Token)
 			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), lumigoEnd.LambdaName)
-			assert.Equal(w.T(), "function", lumigoEnd.LambdaType)
 			assert.Equal(w.T(), "go", lumigoEnd.Runtime)
 			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME"), lumigoEnd.SpanInfo.LogStreamName)
 			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_LOG_GROUP_NAME"), lumigoEnd.SpanInfo.LogGroupName)
@@ -253,13 +302,19 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 			assert.Equal(w.T(), string(inputPayload), lumigoEnd.Event)
 			assert.Equal(w.T(), version, lumigoStart.SpanInfo.TracerVersion.Version)
 
+			if lumigoStart.LambdaType == "http" {
+				assert.Equal(w.T(), 200, lumigoStart.SpanInfo.HttpInfo.Response.StatusCode)
+				assert.Equal(w.T(), `Hello, world!`, lumigoStart.SpanInfo.HttpInfo.Response.Body)
+				assert.Contains(w.T(), `"Content-Length": "13"`, lumigoStart.SpanInfo.HttpInfo.Response.Headers)
+			}
+
 			if testCase.expected.err != nil {
 				assert.NotNil(w.T(), lumigoEnd.SpanError)
 				assert.Equal(w.T(), testCase.expected.err.Error(), lumigoEnd.SpanError.Message)
 				assert.Equal(w.T(), reflect.TypeOf(testCase.expected.err).String(), lumigoEnd.SpanError.Type)
 
 				assert.Contains(t, lumigoEnd.SpanError.Stacktrace, "go-tracer-beta.WrapHandler.func1")
-				assert.Contains(t, lumigoEnd.SpanError.Stacktrace, "go-tracer-beta.(*wrapperTestSuite).TestLambdaHandlerE2ELocal.func5")
+				assert.Contains(t, lumigoEnd.SpanError.Stacktrace, "go-tracer-beta.(*wrapperTestSuite).TestLambdaHandlerE2ELocal.func7")
 			} else {
 				assert.NotNil(w.T(), lumigoEnd.LambdaResponse)
 				assert.Equal(w.T(), testCase.expected.val, *lumigoEnd.LambdaResponse)

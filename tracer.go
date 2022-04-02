@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -49,6 +50,8 @@ func NewTracer(ctx context.Context, cfg Config, payload json.RawMessage) (retTra
 	)
 	retTracer.provider = tracerProvider
 	otel.SetTracerProvider(tracerProvider)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
 	return retTracer, nil
 }
 

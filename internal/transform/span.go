@@ -10,7 +10,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/google/uuid"
 	lumigoctx "github.com/lumigo-io/go-tracer-beta/internal/context"
 	"github.com/lumigo-io/go-tracer-beta/internal/telemetry"
@@ -50,6 +50,7 @@ func (m *mapper) Transform() telemetry.Span {
 	}
 	for _, kv := range m.span.Attributes() {
 		attrs[string(kv.Key)] = kv.Value.AsInterface()
+		m.logger.WithField(string(kv.Key), kv.Value.AsInterface()).Info()
 	}
 
 	m.logger.WithFields(attrs).Info("span attributes")
@@ -64,11 +65,41 @@ func (m *mapper) Transform() telemetry.Span {
 	}
 
 	isStartSpan := telemetry.IsStartSpan(m.span)
+	lumigoSpan.Region = os.Getenv("AWS_REGION")
+	lumigoSpan.MemoryAllocated = os.Getenv("AWS_LAMBDA_FUNCTION_MEMORY_SIZE")
+	lumigoSpan.Runtime = os.Getenv("AWS_EXECUTION_ENV")
+	lumigoSpan.LambdaName = os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
+
+	awsRoot := getAmazonTraceID()
+	if awsRoot == "" {
+		m.logger.Error("unable to fetch Amazon Trace ID")
+	}
+	lumigoSpan.SpanInfo = telemetry.SpanInfo{
+		LogStreamName: os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME"),
+		LogGroupName:  os.Getenv("AWS_LAMBDA_LOG_GROUP_NAME"),
+		TraceID: telemetry.SpanTraceRoot{
+			Root: awsRoot,
+		},
+	}
+
+	lambdaType := "function"
+	if m.span.Name() != lumigoSpan.LambdaName && m.span.Name() != "LumigoParentSpan" {
+		lambdaType = "http"
+		lumigoSpan.SpanInfo.HttpInfo = m.getHTTPInfo(attrs)
+	}
+	lumigoSpan.LambdaType = lambdaType
+
 	lambdaCtx, lambdaOk := lambdacontext.FromContext(m.ctx)
 	if lambdaOk {
-		uuid, _ := uuid.NewUUID()
-		lumigoSpan.LambdaContainerID = uuid.String()
-		lumigoSpan.ID = lambdaCtx.AwsRequestID
+		containerID, _ := uuid.NewUUID()
+		lumigoSpan.LambdaContainerID = containerID.String()
+
+		if lambdaType == "http" {
+			spanID, _ := uuid.NewUUID()
+			lumigoSpan.ID = spanID.String()
+		} else {
+			lumigoSpan.ID = lambdaCtx.AwsRequestID
+		}
 
 		if isStartSpan {
 			lumigoSpan.ID = fmt.Sprintf("%s_started", lumigoSpan.ID)
@@ -104,23 +135,6 @@ func (m *mapper) Transform() telemetry.Span {
 		m.logger.Error("unable to fetch lambda response from span")
 	}
 
-	lumigoSpan.Region = os.Getenv("AWS_REGION")
-	lumigoSpan.MemoryAllocated = os.Getenv("AWS_LAMBDA_FUNCTION_MEMORY_SIZE")
-	lumigoSpan.Runtime = os.Getenv("AWS_EXECUTION_ENV")
-	lumigoSpan.LambdaName = os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
-
-	awsRoot := getAmazonTraceID()
-	if awsRoot == "" {
-		m.logger.Error("unable to fetch Amazon Trace ID")
-	}
-	lumigoSpan.SpanInfo = telemetry.SpanInfo{
-		LogStreamName: os.Getenv("AWS_LAMBDA_LOG_STREAM_NAME"),
-		LogGroupName:  os.Getenv("AWS_LAMBDA_LOG_GROUP_NAME"),
-		TraceID: telemetry.SpanTraceRoot{
-			Root: awsRoot,
-		},
-	}
-
 	if transactionID := getTransactionID(awsRoot); transactionID != "" {
 		lumigoSpan.TransactionID = transactionID
 	} else {
@@ -143,46 +157,11 @@ func (m *mapper) Transform() telemetry.Span {
 		lumigoSpan.LambdaReadiness = "warm"
 	}
 
-	lambdaType := "function"
-	if m.span.Name() != lumigoSpan.LambdaName && m.span.Name() != "LumigoParentSpan" {
-		lambdaType = "http"
-	}
-	lumigoSpan.LambdaType = lambdaType
-
 	if !isStartSpan {
 		lumigoSpan.SpanError = m.getSpanError(attrs)
 	}
 	lumigoSpan.LambdaEnvVars = m.getEnvVars()
 	return lumigoSpan
-}
-
-func isProvisionConcurrencyInitialization() bool {
-	return os.Getenv("AWS_LAMBDA_INITIALIZATION_TYPE") == "provisioned-concurrency"
-}
-
-func getAccountID(ctx *lambdacontext.LambdaContext) (string, error) {
-	functionARN, err := arn.Parse(ctx.InvokedFunctionArn)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to parse ARN")
-	}
-	return functionARN.AccountID, nil
-}
-
-func getAmazonTraceID() string {
-	awsTraceItems := strings.SplitN(os.Getenv("_X_AMZN_TRACE_ID"), ";", 2)
-	if len(awsTraceItems) > 1 {
-		root := strings.SplitN(awsTraceItems[0], "=", 2)
-		return root[1]
-	}
-	return ""
-}
-
-func getTransactionID(root string) string {
-	items := strings.SplitN(root, "-", 3)
-	if len(items) > 1 {
-		return items[2]
-	}
-	return ""
 }
 
 func (m *mapper) getSpanError(attrs map[string]interface{}) *telemetry.SpanError {
@@ -224,4 +203,88 @@ func (m *mapper) getEnvVars() string {
 		m.logger.Error("unable to fetch lambda environment vars")
 	}
 	return string(envsString)
+}
+
+func (m *mapper) getHTTPInfo(attrs map[string]interface{}) *telemetry.SpanHttpInfo {
+	var spanHttpInfo telemetry.SpanHttpInfo
+	if host, ok := attrs["http.host"]; ok {
+		spanHttpInfo.Host = fmt.Sprint(host)
+	} else {
+		m.logger.Error("unable to fetch HTTP host")
+	}
+
+	if method, ok := attrs["http.method"]; ok {
+		spanHttpInfo.Request.Method = aws.String(fmt.Sprint(method))
+	} else {
+		m.logger.Error("unable to fetch HTTP method")
+	}
+
+	if target, ok := attrs["http.target"]; ok {
+		uri := fmt.Sprintf("%s%s", spanHttpInfo.Host, target)
+		spanHttpInfo.Request.URI = aws.String(uri)
+	} else {
+		m.logger.Error("unable to fetch HTTP target")
+	}
+
+	if headers, ok := attrs["http.request_headers"]; ok {
+		spanHttpInfo.Request.Headers = fmt.Sprint(headers)
+	} else {
+		m.logger.Error("unable to fetch HTTP request headers")
+	}
+
+	if reqBody, ok := attrs["http.request_body"]; ok {
+		spanHttpInfo.Request.Body = fmt.Sprint(reqBody)
+	} else {
+		m.logger.Error("unable to fetch HTTP request body")
+	}
+
+	if headers, ok := attrs["http.response_headers"]; ok {
+		spanHttpInfo.Response.Headers = fmt.Sprint(headers)
+	} else {
+		m.logger.Error("unable to fetch HTTP response headers")
+	}
+
+	// response
+	if respBody, ok := attrs["http.response_body"]; ok {
+		spanHttpInfo.Response.Body = fmt.Sprint(respBody)
+	} else {
+		m.logger.Error("unable to fetch HTTP response body")
+	}
+
+	if code, ok := attrs["http.status_code"]; ok {
+		spanHttpInfo.Response.StatusCode = aws.Int64(code.(int64))
+	} else {
+		m.logger.Error("unable to fetch HTTP status code")
+	}
+
+	return &spanHttpInfo
+}
+
+func isProvisionConcurrencyInitialization() bool {
+	return os.Getenv("AWS_LAMBDA_INITIALIZATION_TYPE") == "provisioned-concurrency"
+}
+
+func getAccountID(ctx *lambdacontext.LambdaContext) (string, error) {
+	functionARN, err := arn.Parse(ctx.InvokedFunctionArn)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to parse ARN")
+	}
+	return functionARN.AccountID, nil
+}
+
+func getAmazonTraceID() string {
+	awsTraceItems := strings.SplitN(os.Getenv("_X_AMZN_TRACE_ID"), ";", 2)
+	if len(awsTraceItems) > 1 {
+		root := strings.SplitN(awsTraceItems[0], "=", 2)
+		return root[1]
+	}
+	return ""
+}
+
+func getTransactionID(root string) string {
+	items := strings.SplitN(root, "-", 3)
+	if len(items) > 1 {
+		return items[2]
+	}
+	return ""
 }

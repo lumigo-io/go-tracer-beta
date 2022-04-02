@@ -23,6 +23,24 @@ type SpanInfo struct {
 	LogGroupName  string        `json:"logGroupName"`
 	TraceID       SpanTraceRoot `json:"traceId"`
 	TracerVersion TracerVersion `json:"tracer"`
+	HttpInfo      *SpanHttpInfo `json:"httpInfo,omitempty"`
+}
+
+// SpanHttpInfo extra info for HTTP reuquests
+type SpanHttpInfo struct {
+	Host     string         `json:"host"`
+	Request  SpanHttpCommon `json:"request"`
+	Response SpanHttpCommon `json:"response"`
+}
+
+// SpanHttpRequest the span for the HTTP request
+type SpanHttpCommon struct {
+	URI        *string `json:"uri,omitempty"`
+	Method     *string `json:"method,omitempty"`
+	StatusCode *int64  `json:"statusCode,omitempty"`
+	InstanceID *string `json:"instance_id,omitempty"`
+	Body       string  `json:"body,omitempty"`
+	Headers    string  `json:"headers,omitempty"`
 }
 
 // SpanError the extra info if lambda returned
@@ -108,5 +126,5 @@ type Span struct {
 }
 
 func IsStartSpan(span sdktrace.ReadOnlySpan) bool {
-	return span.Name() == os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
+	return span.Name() == os.Getenv("AWS_LAMBDA_FUNCTION_NAME") || span.Name() == "HttpSpan"
 }
