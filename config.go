@@ -35,20 +35,20 @@ func (cfg Config) validate() error { // nolint
 // init not really used right now
 func init() {
 	viper.AutomaticEnv()
-	viper.SetEnvPrefix("lumigo")
-	viper.SetDefault("Enabled", true)
-	viper.SetDefault("Debug", false)
+	viper.SetEnvPrefix("LUMIGO")
+	viper.SetDefault("ENABLED", true)
+	viper.SetDefault("DEBUG", false)
 }
 
 func loadConfig(conf Config) error {
 	defer recoverWithLogs()
 
-	cfg.Token = viper.GetString("Tracer_Token")
+	cfg.Token = viper.GetString("TRACER_TOKEN")
 	if cfg.Token == "" {
 		cfg.Token = conf.Token
 	}
-	cfg.enabled = viper.GetBool("Enabled")
-	cfg.debug = viper.GetBool("Debug")
+	cfg.enabled = viper.GetBool("ENABLED")
+	cfg.debug = viper.GetBool("DEBUG")
 	cfg.PrintStdout = conf.PrintStdout
 	return cfg.validate()
 }
