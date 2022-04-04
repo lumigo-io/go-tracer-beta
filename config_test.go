@@ -17,7 +17,7 @@ func TestSetupConfSuite(t *testing.T) {
 }
 
 func (conf *configTestSuite) TearDownTest() {
-	os.Unsetenv("LUMIGO_TOKEN")
+	os.Unsetenv("LUMIGO_TRACER_TOKEN")
 	os.Unsetenv("LUMIGO_DEBUG")
 	os.Unsetenv("LUMIGO_ENABLED")
 }
@@ -27,7 +27,7 @@ func (conf *configTestSuite) TestConfigValidationMissingToken() {
 }
 
 func (conf *configTestSuite) TestConfigEnvVariables() {
-	os.Setenv("LUMIGO_TOKEN", "token")
+	os.Setenv("LUMIGO_TRACER_TOKEN", "token")
 	os.Setenv("LUMIGO_DEBUG", "true")
 	os.Setenv("LUMIGO_ENABLED", "false")
 
@@ -39,7 +39,7 @@ func (conf *configTestSuite) TestConfigEnvVariables() {
 }
 
 func (conf *configTestSuite) TestConfigEnabledByDefault() {
-	os.Setenv("LUMIGO_TOKEN", "token")
+	os.Setenv("LUMIGO_TRACER_TOKEN", "token")
 
 	err := loadConfig(Config{})
 	assert.NoError(conf.T(), err)
