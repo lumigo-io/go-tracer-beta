@@ -27,7 +27,7 @@ func (conf *configTestSuite) TestConfigValidationMissingToken() {
 }
 
 func (conf *configTestSuite) TestConfigEnvVariables() {
-	os.Setenv("LUMIGO_TOKEN", "token")
+	os.Setenv("LUMIGO_TRACER_TOKEN", "token")
 	os.Setenv("LUMIGO_DEBUG", "true")
 	os.Setenv("LUMIGO_ENABLED", "false")
 

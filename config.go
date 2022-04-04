@@ -43,7 +43,7 @@ func init() {
 func loadConfig(conf Config) error {
 	defer recoverWithLogs()
 
-	cfg.Token = viper.GetString("Token")
+	cfg.Token = viper.GetString("Tracer_Token")
 	if cfg.Token == "" {
 		cfg.Token = conf.Token
 	}
