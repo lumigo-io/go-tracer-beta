@@ -200,30 +200,30 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 		expected   expected
 		handler    interface{}
 	}{
-		// {
-		// 	name:     "input: string, with context",
-		// 	input:    "test",
-		// 	expected: expected{`"Hello test!"`, nil},
-		// 	handler: func(ctx context.Context, name string) (string, error) {
-		// 		return hello(name), nil
-		// 	},
-		// },
-		// {
-		// 	name:     "input: struct event, response as struct",
-		// 	input:    9090,
-		// 	expected: expected{`{"Port":9090}`, nil},
-		// 	handler: func(event int) (struct{ Port int }, error) {
-		// 		return struct{ Port int }{event}, nil
-		// 	},
-		// },
-		// {
-		// 	name:     "input: struct event, return error",
-		// 	input:    9090,
-		// 	expected: expected{"", errors.New("failed error")},
-		// 	handler: func(event int) (*struct{ Port int }, error) {
-		// 		return nil, errors.New("failed error")
-		// 	},
-		// },
+		{
+			name:     "input: string, with context",
+			input:    "test",
+			expected: expected{`"Hello test!"`, nil},
+			handler: func(ctx context.Context, name string) (string, error) {
+				return hello(name), nil
+			},
+		},
+		{
+			name:     "input: struct event, response as struct",
+			input:    9090,
+			expected: expected{`{"Port":9090}`, nil},
+			handler: func(event int) (struct{ Port int }, error) {
+				return struct{ Port int }{event}, nil
+			},
+		},
+		{
+			name:     "input: struct event, return error",
+			input:    9090,
+			expected: expected{"", errors.New("failed error")},
+			handler: func(event int) (*struct{ Port int }, error) {
+				return nil, errors.New("failed error")
+			},
+		},
 		{
 			name:     "ctxhttp transport",
 			input:    "test",
@@ -280,16 +280,20 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 			assert.Equal(w.T(), "bd862e3fe1be46a994272793", lumigoStart.TransactionID)
 			assert.Equal(w.T(), string(inputPayload), lumigoStart.Event)
 			assert.Equal(w.T(), version, lumigoStart.SpanInfo.TracerVersion.Version)
-			if lumigoStart.LambdaType == "http" {
-				assert.NotNil(w.T(), lumigoStart.SpanInfo.HttpInfo)
-				assert.Equal(w.T(), ts.URL, fmt.Sprintf("http://%s", lumigoStart.SpanInfo.HttpInfo.Host))
-				assert.Equal(w.T(), fmt.Sprintf("%s/", ts.URL), lumigoStart.SpanInfo.HttpInfo.Request.URI)
-				assert.Equal(w.T(), "POST", lumigoStart.SpanInfo.HttpInfo.Request.Method)
-				assert.Equal(w.T(), `{\"name\": \"test\"}`, lumigoStart.SpanInfo.HttpInfo.Request.Body)
-				assert.Contains(w.T(), `"Agent": "test"`, lumigoStart.SpanInfo.HttpInfo.Request.Headers)
+
+			if len(spans.endSpan) > 1 {
+				httpSpan := spans.endSpan[0]
+				if httpSpan.LambdaType == "http" {
+					assert.NotNil(w.T(), httpSpan.SpanInfo.HttpInfo)
+					assert.Equal(w.T(), ts.URL, fmt.Sprintf("http://%s", httpSpan.SpanInfo.HttpInfo.Host))
+					assert.Equal(w.T(), fmt.Sprintf("%s/", ts.URL), httpSpan.SpanInfo.HttpInfo.Request.URI)
+					assert.Equal(w.T(), "POST", httpSpan.SpanInfo.HttpInfo.Request.Method)
+					assert.Equal(w.T(), `{\"name\": \"test\"}`, httpSpan.SpanInfo.HttpInfo.Request.Body)
+					assert.Contains(w.T(), `"Agent": "test"`, httpSpan.SpanInfo.HttpInfo.Request.Headers)
+				}
 			}
 
-			lumigoEnd := spans.endSpan[0]
+			lumigoEnd := spans.endSpan[len(spans.endSpan)-1]
 			assert.Equal(w.T(), "account-id", lumigoEnd.Account)
 			assert.Equal(w.T(), "token", lumigoEnd.Token)
 			assert.Equal(w.T(), os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), lumigoEnd.LambdaName)

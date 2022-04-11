@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -148,7 +149,8 @@ func readSpansFromFile() (spanContainer, error) {
 	var container spanContainer
 	for _, file := range files {
 		var spans []telemetry.Span
-		content, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", SPANS_DIR, file.Name()))
+		filename := filepath.Join(SPANS_DIR, file.Name())
+		content, err := ioutil.ReadFile(filename)
 		if err != nil {
 			return spanContainer{}, err
 		}

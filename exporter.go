@@ -17,10 +17,10 @@ import (
 
 // Exporter exports OpenTelemetry data to Lumigo.
 type Exporter struct {
-	counter   int
-	context   context.Context
-	logger    logrus.FieldLogger
-	encoderMu sync.Mutex
+	lumigoSpans []telemetry.Span
+	context     context.Context
+	logger      logrus.FieldLogger
+	encoderMu   sync.Mutex
 
 	stoppedMu sync.RWMutex
 	stopped   bool
@@ -29,8 +29,9 @@ type Exporter struct {
 // newExporter creates an Exporter with the passed options.
 func newExporter(ctx context.Context, logger logrus.FieldLogger) (*Exporter, error) {
 	return &Exporter{
-		logger:  logger,
-		context: ctx,
+		logger:      logger,
+		context:     ctx,
+		lumigoSpans: []telemetry.Span{},
 	}, nil
 }
 
@@ -39,8 +40,6 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	if e == nil {
 		return nil
 	}
-	fmt.Println("ExportSpans", e.counter)
-	e.counter += 1
 	e.stoppedMu.RLock()
 	stopped := e.stopped
 	e.stoppedMu.RUnlock()
@@ -52,34 +51,27 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 		return nil
 	}
 
-	var lumigoSpans []telemetry.Span
 	e.encoderMu.Lock()
 	defer e.encoderMu.Unlock()
-	fmt.Println("starting loop spans")
 
 	for _, span := range spans {
-		fmt.Println("span name", span.Name())
 		mapper := transform.NewMapper(e.context, span, logger)
 		lumigoSpan := mapper.Transform()
+		fmt.Println("span name: ", span.Name())
 		if telemetry.IsStartSpan(span) {
 			e.logger.Info("writing start span")
-			fmt.Println("writing start span")
 			if err := writeSpan([]telemetry.Span{lumigoSpan}, true); err != nil {
 				return errors.Wrap(err, "failed to store startSpan")
 			}
-			continue
+		} else if telemetry.IsEndSpan(span) {
+			e.lumigoSpans = append(e.lumigoSpans, lumigoSpan)
+			e.logger.Info("writing end span")
+			if err := writeSpan(e.lumigoSpans, false); err != nil {
+				return errors.Wrap(err, "failed to store endSpan")
+			}
+		} else {
+			e.lumigoSpans = append(e.lumigoSpans, lumigoSpan)
 		}
-		fmt.Println("writing regular span")
-		lumigoSpans = append(lumigoSpans, lumigoSpan)
-	}
-
-	if len(lumigoSpans) == 0 {
-		return nil
-	}
-	fmt.Println("writing end span")
-	e.logger.Info("writing end span")
-	if err := writeSpan(lumigoSpans, false); err != nil {
-		return errors.Wrap(err, "failed to store endSpan")
 	}
 	return nil
 }
