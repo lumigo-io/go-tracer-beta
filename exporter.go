@@ -17,6 +17,7 @@ import (
 
 // Exporter exports OpenTelemetry data to Lumigo.
 type Exporter struct {
+	counter   int
 	context   context.Context
 	logger    logrus.FieldLogger
 	encoderMu sync.Mutex
@@ -38,6 +39,8 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	if e == nil {
 		return nil
 	}
+	fmt.Println("ExportSpans", e.counter)
+	e.counter += 1
 	e.stoppedMu.RLock()
 	stopped := e.stopped
 	e.stoppedMu.RUnlock()
