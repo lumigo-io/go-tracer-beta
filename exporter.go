@@ -83,6 +83,7 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 
 // Shutdown is called to stop the exporter, it preforms no action.
 func (e *Exporter) Shutdown(ctx context.Context) error {
+	fmt.Println("(e *Exporter) Shutdown")
 	e.stoppedMu.Lock()
 	e.stopped = true
 	e.stoppedMu.Unlock()
