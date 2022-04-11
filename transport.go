@@ -40,7 +40,7 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 	t.propagator.Inject(traceCtx, propagation.HeaderCarrier(req.Header))
 
 	if req.Body != nil {
-		bodyBytes, bodyErr := io.ReadAll(req.Body)
+		bodyBytes, bodyErr := io.ReadAll(req.Body) // TODO: add limit reader RD-7825
 		if bodyErr != nil {
 			logger.WithError(bodyErr).Error("failed to parse request body")
 		}
@@ -59,7 +59,8 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 	if err != nil {
 		logger.WithError(err).Error("failed to fetch request headers")
 	}
-	span.SetAttributes(attribute.String("http.request_headers", string(headersJson)))
+	reqHeaderString := string(headersJson)
+	span.SetAttributes(attribute.String("http.request_headers", reqHeaderString))
 
 	resp, err = t.rt.RoundTrip(req)
 
@@ -80,7 +81,7 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 	span.SetAttributes(attribute.String("http.response_headers", string(headersJson)))
 
 	if resp.Body != nil {
-		bodyBytes, bodyErr := io.ReadAll(resp.Body)
+		bodyBytes, bodyErr := io.ReadAll(resp.Body) // TODO: add limit reader RD-7825
 		if bodyErr != nil {
 			logger.WithError(bodyErr).Error("failed to parse response body")
 		}
@@ -88,6 +89,7 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 		resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
 	}
 	resp.Body = &wrappedBody{ctx: traceCtx, span: span, body: resp.Body}
+	span.End()
 	return resp, err
 }
 

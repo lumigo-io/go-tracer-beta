@@ -57,20 +57,20 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	for _, span := range spans {
 		mapper := transform.NewMapper(e.context, span, logger)
 		lumigoSpan := mapper.Transform()
-		fmt.Println("span name: ", span.Name())
 		if telemetry.IsStartSpan(span) {
 			e.logger.Info("writing start span")
 			if err := writeSpan([]telemetry.Span{lumigoSpan}, true); err != nil {
 				return errors.Wrap(err, "failed to store startSpan")
 			}
-		} else if telemetry.IsEndSpan(span) {
+		} else {
+			// TODO: add maximum size to lumigoSpans RD-7826
 			e.lumigoSpans = append(e.lumigoSpans, lumigoSpan)
+		}
+		if telemetry.IsEndSpan(span) {
 			e.logger.Info("writing end span")
 			if err := writeSpan(e.lumigoSpans, false); err != nil {
 				return errors.Wrap(err, "failed to store endSpan")
 			}
-		} else {
-			e.lumigoSpans = append(e.lumigoSpans, lumigoSpan)
 		}
 	}
 	return nil
@@ -78,7 +78,6 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 
 // Shutdown is called to stop the exporter, it preforms no action.
 func (e *Exporter) Shutdown(ctx context.Context) error {
-	fmt.Println("(e *Exporter) Shutdown")
 	e.stoppedMu.Lock()
 	e.stopped = true
 	e.stoppedMu.Unlock()
