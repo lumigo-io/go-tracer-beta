@@ -60,17 +60,20 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 		lumigoSpan := mapper.Transform()
 		if telemetry.IsStartSpan(span) {
 			e.logger.Info("writing start span")
+			fmt.Println("writing start span")
 			if err := writeSpan([]telemetry.Span{lumigoSpan}, true); err != nil {
 				return errors.Wrap(err, "failed to store startSpan")
 			}
 			continue
 		}
+		fmt.Println("writing regular span")
 		lumigoSpans = append(lumigoSpans, lumigoSpan)
 	}
 
 	if len(lumigoSpans) == 0 {
 		return nil
 	}
+	fmt.Println("writing end span")
 	e.logger.Info("writing end span")
 	if err := writeSpan(lumigoSpans, false); err != nil {
 		return errors.Wrap(err, "failed to store endSpan")
