@@ -61,7 +61,7 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 		mapper := transform.NewMapper(e.context, span, logger)
 		lumigoSpan := mapper.Transform()
 		e.spansTotalSizeBytes += int64(reflect.TypeOf(lumigoSpan).Size())
-
+		fmt.Println("spansTotalSizeBytes", e.spansTotalSizeBytes)
 		maxSizeOfSpansString := getenv("MAX_SIZE_FOR_REQUEST", 1024*500)
 		if e.spansTotalSizeBytes > maxSizeOfSpansString {
 			e.logger.Error("spans total size is bigger than max size")

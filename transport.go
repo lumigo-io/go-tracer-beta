@@ -63,7 +63,9 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 	span.SetAttributes(attribute.String("http.request_headers", reqHeaderString))
 
 	resp, err = t.rt.RoundTrip(req)
-
+	if resp == nil {
+		return nil, err
+	}
 	// response
 	span.SetAttributes(semconv.HTTPAttributesFromHTTPStatusCode(resp.StatusCode)...)
 	span.SetStatus(semconv.SpanStatusFromHTTPStatusCode(resp.StatusCode))
@@ -89,7 +91,6 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 		resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
 	}
 	resp.Body = &wrappedBody{ctx: traceCtx, span: span, body: resp.Body}
-	// span.End()
 	return resp, err
 }
 

@@ -239,7 +239,6 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 				}
 				r.Header.Set("Agent", "test")
 				c := &http.Client{Transport: NewTransport(http.DefaultTransport)}
-				ctxhttp.Do(context.Background(), c, r) // nolint
 
 				res, err := ctxhttp.Do(ctx, c, r)
 				if err != nil {
