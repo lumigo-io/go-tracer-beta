@@ -89,7 +89,7 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 		resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
 	}
 	resp.Body = &wrappedBody{ctx: traceCtx, span: span, body: resp.Body}
-	span.End()
+	// span.End()
 	return resp, err
 }
 
