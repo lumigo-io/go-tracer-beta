@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strconv"
 	"sync"
 
 	"github.com/lumigo-io/go-tracer-beta/internal/telemetry"
@@ -19,7 +18,7 @@ import (
 
 // Exporter exports OpenTelemetry data to Lumigo.
 type Exporter struct {
-	spansTotalSizeBytes int64
+	spansTotalSizeBytes int
 	lumigoSpans         []telemetry.Span
 	context             context.Context
 	logger              logrus.FieldLogger
@@ -60,8 +59,8 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	for _, span := range spans {
 		mapper := transform.NewMapper(e.context, span, logger)
 		lumigoSpan := mapper.Transform()
-		e.spansTotalSizeBytes += int64(reflect.TypeOf(lumigoSpan).Size())
-		fmt.Println("spansTotalSizeBytes", e.spansTotalSizeBytes)
+		e.spansTotalSizeBytes += int(reflect.TypeOf(lumigoSpan).Size())
+		// maximum size to lumigoSpans RD-7826
 		maxSizeOfSpansString := getenv("MAX_SIZE_FOR_REQUEST", 1024*500)
 		if e.spansTotalSizeBytes > maxSizeOfSpansString {
 			e.logger.Error("spans total size is bigger than max size")
@@ -73,7 +72,6 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 				return errors.Wrap(err, "failed to store startSpan")
 			}
 		} else {
-			// TODO: add maximum size to lumigoSpans RD-7826
 			e.lumigoSpans = append(e.lumigoSpans, lumigoSpan)
 		}
 		if telemetry.IsEndSpan(span) {
@@ -117,16 +115,4 @@ func writeSpan(spans []telemetry.Span, isStart bool) error {
 		return errors.Wrapf(err, "failed to write span in data store: %s", file)
 	}
 	return nil
-}
-
-func getenv(key string, fallback int64) int64 {
-	value := os.Getenv(key)
-	if len(value) == 0 {
-		return fallback
-	}
-	intVar, err := strconv.ParseInt(value, 0, 8)
-	if err != nil {
-		return fallback
-	}
-	return intVar
 }

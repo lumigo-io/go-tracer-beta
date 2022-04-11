@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/lambda/messages"
@@ -200,30 +201,30 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 		expected   expected
 		handler    interface{}
 	}{
-		// {
-		// 	name:     "input: string, with context",
-		// 	input:    "test",
-		// 	expected: expected{`"Hello test!"`, nil},
-		// 	handler: func(ctx context.Context, name string) (string, error) {
-		// 		return hello(name), nil
-		// 	},
-		// },
-		// {
-		// 	name:     "input: struct event, response as struct",
-		// 	input:    9090,
-		// 	expected: expected{`{"Port":9090}`, nil},
-		// 	handler: func(event int) (struct{ Port int }, error) {
-		// 		return struct{ Port int }{event}, nil
-		// 	},
-		// },
-		// {
-		// 	name:     "input: struct event, return error",
-		// 	input:    9090,
-		// 	expected: expected{"", errors.New("failed error")},
-		// 	handler: func(event int) (*struct{ Port int }, error) {
-		// 		return nil, errors.New("failed error")
-		// 	},
-		// },
+		{
+			name:     "input: string, with context",
+			input:    "test",
+			expected: expected{`"Hello test!"`, nil},
+			handler: func(ctx context.Context, name string) (string, error) {
+				return hello(name), nil
+			},
+		},
+		{
+			name:     "input: struct event, response as struct",
+			input:    9090,
+			expected: expected{`{"Port":9090}`, nil},
+			handler: func(event int) (struct{ Port int }, error) {
+				return struct{ Port int }{event}, nil
+			},
+		},
+		{
+			name:     "input: struct event, return error",
+			input:    9090,
+			expected: expected{"", errors.New("failed error")},
+			handler: func(event int) (*struct{ Port int }, error) {
+				return nil, errors.New("failed error")
+			},
+		},
 		{
 			name:     "ctxhttp transport",
 			input:    "test",
@@ -231,7 +232,7 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 			expected: expected{`"Hello test!"`, nil},
 			handler: func(ctx context.Context, name string) (string, error) {
 				postBody, _ := json.Marshal(map[string]string{
-					"name": "test",
+					"name": strings.Repeat("test", 512),
 				})
 				r, err := http.NewRequestWithContext(ctx, http.MethodPost, ts.URL, bytes.NewBuffer(postBody))
 				if err != nil {
@@ -287,7 +288,8 @@ func (w *wrapperTestSuite) TestLambdaHandlerE2ELocal() {
 					assert.Equal(w.T(), ts.URL, "http://"+httpSpan.SpanInfo.HttpInfo.Host)
 					assert.Equal(w.T(), ts.URL, "http://"+*httpSpan.SpanInfo.HttpInfo.Request.URI)
 					assert.Equal(w.T(), "POST", *httpSpan.SpanInfo.HttpInfo.Request.Method)
-					assert.Equal(w.T(), `{"name":"test"}`, httpSpan.SpanInfo.HttpInfo.Request.Body)
+					assert.Equal(w.T(), 2048, len(httpSpan.SpanInfo.HttpInfo.Request.Body))
+					assert.Contains(w.T(), httpSpan.SpanInfo.HttpInfo.Request.Body, `{"name":"test`)
 					assert.Contains(w.T(), httpSpan.SpanInfo.HttpInfo.Request.Headers, `"Agent":"test"`)
 				}
 			}
