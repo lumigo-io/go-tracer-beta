@@ -58,6 +58,7 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	fmt.Println("starting loop spans")
 
 	for _, span := range spans {
+		fmt.Println("span name", span.Name())
 		mapper := transform.NewMapper(e.context, span, logger)
 		lumigoSpan := mapper.Transform()
 		if telemetry.IsStartSpan(span) {
