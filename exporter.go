@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
+	"strconv"
 	"sync"
 
 	"github.com/lumigo-io/go-tracer-beta/internal/telemetry"
@@ -17,10 +19,11 @@ import (
 
 // Exporter exports OpenTelemetry data to Lumigo.
 type Exporter struct {
-	lumigoSpans []telemetry.Span
-	context     context.Context
-	logger      logrus.FieldLogger
-	encoderMu   sync.Mutex
+	spansTotalSizeBytes int64
+	lumigoSpans         []telemetry.Span
+	context             context.Context
+	logger              logrus.FieldLogger
+	encoderMu           sync.Mutex
 
 	stoppedMu sync.RWMutex
 	stopped   bool
@@ -57,6 +60,13 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	for _, span := range spans {
 		mapper := transform.NewMapper(e.context, span, logger)
 		lumigoSpan := mapper.Transform()
+		e.spansTotalSizeBytes += int64(reflect.TypeOf(lumigoSpan).Size())
+
+		maxSizeOfSpansString := getenv("MAX_SIZE_FOR_REQUEST", 1024*500)
+		if e.spansTotalSizeBytes > maxSizeOfSpansString {
+			e.logger.Error("spans total size is bigger than max size")
+			return nil
+		}
 		if telemetry.IsStartSpan(span) {
 			e.logger.Info("writing start span")
 			if err := writeSpan([]telemetry.Span{lumigoSpan}, true); err != nil {
@@ -107,4 +117,16 @@ func writeSpan(spans []telemetry.Span, isStart bool) error {
 		return errors.Wrapf(err, "failed to write span in data store: %s", file)
 	}
 	return nil
+}
+
+func getenv(key string, fallback int64) int64 {
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		return fallback
+	}
+	intVar, err := strconv.ParseInt(value, 0, 8)
+	if err != nil {
+		return fallback
+	}
+	return intVar
 }
