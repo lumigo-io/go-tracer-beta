@@ -55,6 +55,8 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	var lumigoSpans []telemetry.Span
 	e.encoderMu.Lock()
 	defer e.encoderMu.Unlock()
+	e.logger.Info("starting loop spans")
+
 	for _, span := range spans {
 		mapper := transform.NewMapper(e.context, span, logger)
 		lumigoSpan := mapper.Transform()
