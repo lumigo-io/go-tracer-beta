@@ -43,14 +43,14 @@ type LogFormatter struct{}
 //Format details
 func (s *LogFormatter) Format(entry *log.Entry) ([]byte, error) {
 	timestamp := time.Now().UTC().Format("2006-01-02 15:04:05")
-	msg := fmt.Sprintf("#LUMIGO#-%s-%s-message:%s ", timestamp, strings.ToUpper(entry.Level.String()), entry.Message)
+	msg := fmt.Sprintf("#LUMIGO# - %s - %s - %s ", timestamp, strings.ToUpper(entry.Level.String()), entry.Message)
 	if entry.Data != nil {
 		jsonBytes, err := json.Marshal(entry.Data)
 		if err != nil {
 			msg += fmt.Sprintf("failed to extract data from logger err: %+v", err)
 
 		} else {
-			msg += "structured data-" + string(jsonBytes)
+			msg += "structured data: " + string(jsonBytes)
 		}
 	}
 	msg += "\n"
