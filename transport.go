@@ -7,8 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
-	"strconv"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -40,16 +38,14 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 	span.SetAttributes(semconv.HTTPTargetKey.String(req.URL.Path))
 	span.SetAttributes(semconv.HTTPHostKey.String(req.URL.Host))
 	t.propagator.Inject(traceCtx, propagation.HeaderCarrier(req.Header))
-	// maximum size to lumigoSpans RD-7825
-	maxEntrySize := getenv("DEFAULT_MAX_ENTRY_SIZE", 2048)
 	if req.Body != nil {
 		bodyBytes, bodyErr := io.ReadAll(req.Body)
 		if bodyErr != nil {
 			logger.WithError(bodyErr).Error("failed to parse request body")
 		}
 
-		if len(bodyBytes) > maxEntrySize {
-			span.SetAttributes(attribute.String("http.request_body", string(bodyBytes[:maxEntrySize])))
+		if len(bodyBytes) > cfg.MaxEntrySize {
+			span.SetAttributes(attribute.String("http.request_body", string(bodyBytes[:cfg.MaxEntrySize])))
 		} else {
 			span.SetAttributes(attribute.String("http.request_body", string(bodyBytes)))
 		}
@@ -68,7 +64,11 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 		logger.WithError(err).Error("failed to fetch request headers")
 	}
 	reqHeaderString := string(headersJson)
-	span.SetAttributes(attribute.String("http.request_headers", reqHeaderString))
+	if len(reqHeaderString) > cfg.MaxEntrySize {
+		span.SetAttributes(attribute.String("http.request_headers", string(reqHeaderString[:cfg.MaxEntrySize])))
+	} else {
+		span.SetAttributes(attribute.String("http.request_headers", string(reqHeaderString)))
+	}
 
 	resp, err = t.rt.RoundTrip(req)
 	if resp == nil {
@@ -88,15 +88,19 @@ func (t *Transport) RoundTrip(req *http.Request) (resp *http.Response, err error
 	if jsonErr != nil {
 		logger.WithError(err).Error("failed to fetch response headers")
 	}
-	span.SetAttributes(attribute.String("http.response_headers", string(headersJson)))
+	if len(headersJson) > cfg.MaxEntrySize {
+		span.SetAttributes(attribute.String("http.response_headers", string(headersJson[:cfg.MaxEntrySize])))
+	} else {
+		span.SetAttributes(attribute.String("http.response_headers", string(headersJson)))
+	}
 
 	if resp.Body != nil {
-		bodyBytes, bodyErr := io.ReadAll(resp.Body) // TODO: add limit reader RD-7825
+		bodyBytes, bodyErr := io.ReadAll(resp.Body)
 		if bodyErr != nil {
 			logger.WithError(bodyErr).Error("failed to parse response body")
 		}
-		if len(bodyBytes) > maxEntrySize {
-			span.SetAttributes(attribute.String("http.response_body", string(bodyBytes[:maxEntrySize])))
+		if len(bodyBytes) > cfg.MaxEntrySize {
+			span.SetAttributes(attribute.String("http.response_body", string(bodyBytes[:cfg.MaxEntrySize])))
 		} else {
 			span.SetAttributes(attribute.String("http.response_body", string(bodyBytes)))
 		}
@@ -133,16 +137,4 @@ func (wb *wrappedBody) Read(b []byte) (int, error) {
 func (wb *wrappedBody) Close() error {
 	wb.span.End()
 	return wb.body.Close()
-}
-
-func getenv(key string, fallback int) int {
-	value := os.Getenv(key)
-	if len(value) == 0 {
-		return fallback
-	}
-	intVar, err := strconv.Atoi(value)
-	if err != nil {
-		return fallback
-	}
-	return intVar
 }

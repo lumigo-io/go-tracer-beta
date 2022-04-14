@@ -59,27 +59,29 @@ func (e *Exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	for _, span := range spans {
 		mapper := transform.NewMapper(e.context, span, logger)
 		lumigoSpan := mapper.Transform()
-		e.spansTotalSizeBytes += int(reflect.TypeOf(lumigoSpan).Size())
-		// maximum size to lumigoSpans RD-7826
-		maxSizeOfSpansString := getenv("MAX_SIZE_FOR_REQUEST", 1024*500)
-		if e.spansTotalSizeBytes > maxSizeOfSpansString {
-			e.logger.Error("spans total size is bigger than max size")
+
+		if telemetry.IsEndSpan(span) {
+			e.lumigoSpans = append(e.lumigoSpans, lumigoSpan)
+			e.logger.Info("writing end span and http spans")
+			if err := writeSpan(e.lumigoSpans, false); err != nil {
+				return errors.Wrap(err, "failed to store end span and http spans")
+			}
 			return nil
-		}
-		if telemetry.IsStartSpan(span) {
+		} else if telemetry.IsStartSpan(span) {
 			e.logger.Info("writing start span")
 			if err := writeSpan([]telemetry.Span{lumigoSpan}, true); err != nil {
 				return errors.Wrap(err, "failed to store startSpan")
 			}
-		} else {
-			e.lumigoSpans = append(e.lumigoSpans, lumigoSpan)
+			continue
 		}
-		if telemetry.IsEndSpan(span) {
-			e.logger.Info("writing end span")
-			if err := writeSpan(e.lumigoSpans, false); err != nil {
-				return errors.Wrap(err, "failed to store endSpan")
-			}
+
+		spanSize := int(reflect.TypeOf(lumigoSpan).Size())
+		if e.spansTotalSizeBytes+spanSize > cfg.MaxSizeForRequest {
+			e.logger.Warn("spans total size is bigger than max size")
+			continue
 		}
+		e.spansTotalSizeBytes += spanSize
+		e.lumigoSpans = append(e.lumigoSpans, lumigoSpan)
 	}
 	return nil
 }
