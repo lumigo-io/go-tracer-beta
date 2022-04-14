@@ -3,14 +3,16 @@ package lumigotracer
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	lumigoctx "github.com/lumigo-io/go-tracer-beta/internal/context"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	easy "github.com/t-tomalak/logrus-easy-formatter"
 	lambdadetector "go.opentelemetry.io/contrib/detectors/aws/lambda"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-lambda-go/otellambda"
 	"go.opentelemetry.io/otel/attribute"
@@ -32,10 +34,22 @@ const (
 func init() {
 	logger = log.New()
 	logger.Out = os.Stdout
-	logger.Formatter = &easy.Formatter{
-		TimestampFormat: "2006-01-02 15:04:05",
-		LogFormat:       "#LUMIGO# - %time% - %lvl% - %msg%\n",
+	logger.Formatter = &LogFormatter{}
+}
+
+//Log custom format
+type LogFormatter struct{}
+
+//Format details
+func (s *LogFormatter) Format(entry *log.Entry) ([]byte, error) {
+	timestamp := time.Now().Local().Format("2006-01-02 15:04:05")
+	msg := fmt.Sprintf("#LUMIGO#-%s-%s-message:%s ", timestamp, strings.ToUpper(entry.Level.String()), entry.Message)
+	for k, v := range entry.Data {
+		msg += fmt.Sprintf("%s:%v ", k, v)
+		entry.Data[k] = fmt.Sprintf("%v", v)
 	}
+	msg += "\n"
+	return []byte(msg), nil
 }
 
 // WrapHandler wraps the lambda handler

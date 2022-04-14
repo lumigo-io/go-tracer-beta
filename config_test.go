@@ -29,6 +29,7 @@ func (conf *configTestSuite) TestConfigValidationMissingToken() {
 }
 
 func (conf *configTestSuite) TestConfigEnvVariables() {
+
 	os.Setenv("LUMIGO_TRACER_TOKEN", "token")
 	os.Setenv("LUMIGO_DEBUG", "true")
 	os.Setenv("LUMIGO_ENABLED", "false")
@@ -52,4 +53,6 @@ func (conf *configTestSuite) TestConfigEnabledByDefault() {
 	assert.Equal(conf.T(), "token", cfg.Token)
 	assert.Equal(conf.T(), false, cfg.debug)
 	assert.Equal(conf.T(), true, cfg.enabled)
+	assert.Equal(conf.T(), 2048, cfg.MaxEntrySize)
+	assert.Equal(conf.T(), 512000, cfg.MaxSizeForRequest)
 }

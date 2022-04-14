@@ -34,6 +34,12 @@ func TestSetupExporterSuite(t *testing.T) {
 
 func (e *exporterTestSuite) TearDownTest() {
 	assert.NoError(e.T(), deleteAllFiles())
+	_ = os.Unsetenv("AWS_LAMBDA_FUNCTION_NAME")
+	_ = os.Unsetenv("AWS_REGION")
+	_ = os.Unsetenv("AWS_LAMBDA_LOG_STREAM_NAME")
+	_ = os.Unsetenv("AWS_LAMBDA_LOG_GROUP_NAME")
+	_ = os.Unsetenv("AWS_LAMBDA_FUNCTION_VERSION")
+	_ = os.Unsetenv("_X_AMZN_TRACE_ID")
 }
 
 func (e *exporterTestSuite) TestNilExporter() {
@@ -160,30 +166,12 @@ func (e *exporterTestSuite) TestExportSpansReachLimit() {
 		startSpan.Snapshot(),
 	})
 	assert.NoError(e.T(), err)
-	err = exp.ExportSpans(context.Background(), []trace.ReadOnlySpan{
-		httpSpan.Snapshot(),
-	})
-	assert.NoError(e.T(), err)
-	err = exp.ExportSpans(context.Background(), []trace.ReadOnlySpan{
-		httpSpan.Snapshot(),
-	})
-	assert.NoError(e.T(), err)
-	err = exp.ExportSpans(context.Background(), []trace.ReadOnlySpan{
-		httpSpan.Snapshot(),
-	})
-	assert.NoError(e.T(), err)
-	err = exp.ExportSpans(context.Background(), []trace.ReadOnlySpan{
-		httpSpan.Snapshot(),
-	})
-	assert.NoError(e.T(), err)
-	err = exp.ExportSpans(context.Background(), []trace.ReadOnlySpan{
-		httpSpan.Snapshot(),
-	})
-	assert.NoError(e.T(), err)
-	err = exp.ExportSpans(context.Background(), []trace.ReadOnlySpan{
-		httpSpan.Snapshot(),
-	})
-	assert.NoError(e.T(), err)
+	for i := 0; i < 10; i++ {
+		err = exp.ExportSpans(context.Background(), []trace.ReadOnlySpan{
+			httpSpan.Snapshot(),
+		})
+		assert.NoError(e.T(), err)
+	}
 	err = exp.ExportSpans(context.Background(), []trace.ReadOnlySpan{
 		endSpan.Snapshot(),
 	})
@@ -240,5 +228,3 @@ func deleteAllFiles() error {
 	}
 	return nil
 }
-
-// TODO: add test for amount of spans reached limit
