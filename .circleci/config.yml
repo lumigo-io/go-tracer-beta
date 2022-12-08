@@ -1,12 +1,13 @@
 version: 2.1
+
+orbs:
+  github-cli: &github_cli_version circleci/github-cli@1.0
+  lumigo-orb: &lumigo_orb_version lumigo/lumigo-orb@volatile
+
 executors:
   default:
     docker:
     - image: circleci/golang:1.17
-
-orbs:
-  gh: circleci/github-cli@1.0
-  lumigo-orb: lumigo/lumigo-orb@volatile
 
 aliases:
 - &restore_cache
@@ -18,47 +19,53 @@ aliases:
     paths:
       - "/go/pkg/mod"
 
-jobs:
-  test:
-    executor:
-      name: default
-    steps:
-    - checkout
-    - *restore_cache
-    - run: make checks
-    - run: make upload-codecov
-    - *save_cache
-  
-  create-push-release:
-    executor:
-      name: default
-    steps:
-    - gh/setup
-    - checkout
-    - run: |
-        make release 
-
 workflows:
   ci-build:
     jobs:
+    - lumigo-orb/print_orb_versions:
+        github_cli_version: *github_cli_version
+        lumigo_orb_version: *lumigo_orb_version
     - test:
         filters:
           branches:
             ignore: master
+    - lumigo-orb/is_environment_available
     - lumigo-orb/be-deploy:
         filters:
           branches:
             ignore: master
         requires:
           - test
-    - lumigo-orb/integration-test:
+          - lumigo-orb/is_environment_available
+    - lumigo-orb/integration-test-prep:
+        deploy_spec: default
+        filters:
+          branches:
+            ignore: master
+        requires:
+          - lumigo-orb/be-deploy
+    - lumigo-orb/integration-test-limited-flows:
         deploy_spec: default
         tests_spec: testNormal
         filters:
           branches:
             ignore: master
         requires:
-          - lumigo-orb/be-deploy
+          - lumigo-orb/integration-test-prep
+    - lumigo-orb/integration-test-parallel:
+        deploy_spec: default
+        tests_spec: testNormal
+        filters:
+          branches:
+            ignore: master
+        requires:
+          - lumigo-orb/integration-test-limited-flows
+    - lumigo-orb/workflow-completed-successfully:
+        filters:
+          branches:
+            ignore: master
+        requires:
+          - lumigo-orb/integration-test-parallel
 
   master-build:
     jobs:
@@ -72,3 +79,23 @@ workflows:
           branches:
             only:
             - master
+
+jobs:
+  test:
+    executor:
+      name: default
+    steps:
+    - checkout
+    - *restore_cache
+    - run: make checks
+    - run: make upload-codecov
+    - *save_cache
+
+  create-push-release:
+    executor:
+      name: default
+    steps:
+    - github-cli/setup
+    - checkout
+    - run: |
+        make release
